@@ -1,120 +1,117 @@
-# Évaluation
+# Evaluation
 
-Ce document détaille comment le retrieval et la génération sont évalués, avec
-les résultats réels obtenus sur ce corpus. Retour au [README](../README.md).
+This document details how retrieval and generation are evaluated, with the
+real results obtained on this corpus. Back to the [README](../README.md).
 
-## 1. Évaluation du retrieval
+## 1. Retrieval evaluation
 
-**Script :** [`src/eval/retrieval_eval.py`](../src/eval/retrieval_eval.py)
-**Jeu de questions :** [`src/eval/questions_annotees.json`](../src/eval/questions_annotees.json)
-— 8 questions en français, chacune annotée avec les mots-clés anglais
-attendus dans une source pertinente (le corpus est en anglais, les questions
-utilisateur sont en français).
+**Script:** [`src/eval/retrieval_eval.py`](../src/eval/retrieval_eval.py)
+**Question set:** [`src/eval/questions_annotees.json`](../src/eval/questions_annotees.json)
+— 8 questions in French, each annotated with the English keywords expected
+in a relevant source (the corpus is in English; user-facing questions are
+in French, matching the app's target audience).
 
-### Méthodologie
+### Methodology
 
-On ne dispose pas de labels "ce chunk_id est pertinent pour cette question"
-(ça demanderait une annotation manuelle chunk-par-chunk, hors scope solo).
-À la place, on utilise un proxy simple mais objectif : un chunk est considéré
-"pertinent" s'il contient au moins un des mots-clés attendus. Pour chaque
-mode de retrieval, sur chaque question :
+There are no manual "this chunk_id is relevant to this question" labels
+(that would require chunk-by-chunk annotation, out of scope for a solo
+project). Instead, a simple but objective proxy is used: a chunk is
+considered "relevant" if it contains at least one of the expected
+keywords. For each retrieval mode, on each question:
 
-- **Recall@8** : 1 si un chunk pertinent apparaît dans les 8 premiers
-  résultats, 0 sinon.
-- **MRR** (Mean Reciprocal Rank) : `1 / rang` du premier chunk pertinent
-  (0 si aucun).
+- **Recall@8**: 1 if a relevant chunk appears in the top 8 results, 0
+  otherwise.
+- **MRR** (Mean Reciprocal Rank): `1 / rank` of the first relevant chunk
+  (0 if none found).
 
-Quatre modes sont comparés : `vector` (embeddings seuls), `bm25` (lexical
-seul), `hybrid` (fusion RRF vecteur+BM25 — voir
-[`src/retrieval/hybrid.py`](../src/retrieval/hybrid.py)), et `graph`
-(traversée du graphe de connaissances extrait par LLM).
+Four modes are compared: `vector` (embeddings only), `bm25` (lexical
+only), `hybrid` (vector+BM25 RRF fusion — see
+[`src/retrieval/hybrid.py`](../src/retrieval/hybrid.py)), and `graph`
+(traversal of the LLM-extracted knowledge graph).
 
-### Résultats (corpus actuel, 561 papiers / 1376 chunks)
+### Results (current corpus: 561 papers / 1376 chunks)
 
-| Mode     | Recall@8 | MRR    |
-|----------|:--------:|:------:|
-| vector   | 1.00     | 0.938  |
-| bm25     | 0.875    | 0.625  |
+| Mode | Recall@8 | MRR |
+|---|:---:|:---:|
+| vector | 1.00 | 0.938 |
+| bm25 | 0.875 | 0.625 |
 | **hybrid** | **1.00** | **0.917** |
-| graph    | 1.00     | 1.00   |
+| graph | 1.00 | 1.00 |
 
-Régénérable avec :
+Reproduce with:
 ```bash
 docker compose exec app python src/eval/retrieval_eval.py
 ```
-Résultats bruts : [`data/eval_results/retrieval_eval.json`](../data/eval_results/retrieval_eval.json).
+Raw results: [`data/eval_results/retrieval_eval.json`](../data/eval_results/retrieval_eval.json).
 
-### Pourquoi `hybrid` est le mode par défaut de l'app malgré ces chiffres
+### Why `hybrid` is the app's default mode despite these numbers
 
-Sur cet échantillon de 8 questions, `vector` et `graph` affichent un MRR
-nominalement supérieur à `hybrid`. Deux raisons pour ne pas en conclure
-"il faut désactiver hybrid" :
+On this 8-question sample, `vector` and `graph` show a nominally higher
+MRR than `hybrid`. Two reasons not to read this as "turn hybrid off":
 
-1. **8 questions, c'est trop peu pour trancher statistiquement** — un
-   écart de 0.02 sur 8 échantillons n'est pas significatif.
-2. **Le proxy "graph" est structurellement avantagé par cette métrique** :
-   `evaluate_graph()` compte un hit dès qu'il existe *une* relation pour le
-   premier mot-clé de la question, sans notion de rang ni de pertinence du
-   contenu retourné (contrairement à `vector`/`bm25`/`hybrid` qui classent
-   réellement des chunks). Le MRR de 1.0 reflète donc "le terme existe dans
-   le graphe", pas "la meilleure réponse est en position 1". Ce n'est pas
-   comparable à la même métrique appliquée aux deux autres modes — limite du
-   script d'éval, documentée ici plutôt que cachée.
-3. **BM25 seul décroche nettement** (0.625 de MRR) sur des questions posées
-   en français avec un corpus en anglais — l'appariement lexical exact rate
-   les synonymes/traductions que les embeddings capturent. `hybrid` reste
-   la valeur par défaut parce qu'il ne perd jamais beaucoup face au meilleur
-   mode individuel tout en évitant le pire cas (une question purement
-   terminologique où BM25 est fort, ou au contraire une question aux
-   synonymes multiples où le vecteur est fort) — c'est un choix de
-   robustesse, pas seulement de score brut sur cet échantillon.
+1. **8 questions is too small a sample to be conclusive** — a 0.02 gap on
+   8 data points isn't statistically meaningful.
+2. **The `graph` proxy is structurally favored by this metric**:
+   `evaluate_graph()` counts a hit as soon as *any* relation exists for the
+   question's first keyword, with no notion of rank or content quality
+   (unlike `vector`/`bm25`/`hybrid`, which actually rank retrieved chunks).
+   An MRR of 1.0 here means "the term exists somewhere in the graph", not
+   "the best answer is ranked first". This isn't directly comparable to
+   the same metric applied to the other three modes — a real limitation of
+   the eval script, documented here rather than hidden.
+3. **BM25 alone drops noticeably** (0.625 MRR) on questions asked in
+   French against an English corpus — exact lexical matching misses the
+   synonyms/translations that embeddings capture. `hybrid` remains the
+   default because it never loses much against the best individual mode
+   while avoiding the worst case (a purely terminological question where
+   BM25 is strong, or conversely a question with many synonyms where
+   vector search is strong) — a robustness choice, not just raw score on
+   this sample.
 
-## 2. Évaluation de la génération (LLM-as-judge)
+## 2. LLM generation evaluation (LLM-as-judge)
 
-**Script :** [`src/eval/llm_eval.py`](../src/eval/llm_eval.py)
+**Script:** [`src/eval/llm_eval.py`](../src/eval/llm_eval.py)
 
-Compare deux stratégies de prompt pour `generate_answer()` :
+Compares two prompting strategies for `generate_answer()`:
 
-- `zero_shot` : réponse libre avec citations `[source: n]`.
-- `structured_evidence` : réponse structurée en 3 parties (résumé / preuves
-  citées / limites-contradictions).
+- `zero_shot`: free-form answer with `[source: n]` citations.
+- `structured_evidence`: answer structured into 3 parts (one-sentence
+  summary / cited evidence / limitations-and-contradictions).
 
-Pour chaque question × stratégie, un second appel LLM ("juge", même modèle
-Groq, température 0, sortie JSON forcée) note la **fidélité** (0-10) de la
-réponse aux extraits fournis — c'est-à-dire si chaque affirmation est
-traçable à une source, sans hallucination.
+For each question × strategy, a second LLM call ("judge", same Groq model,
+temperature 0, forced JSON output) scores the **faithfulness** (0-10) of
+the answer to the provided excerpts — i.e. whether every claim is
+traceable to a source, with no hallucination.
 
-Régénérable avec :
+Reproduce with:
 ```bash
 docker compose exec app python src/eval/llm_eval.py
 ```
-Résultats bruts : `data/eval_results/llm_eval.json`.
+Raw results: `data/eval_results/llm_eval.json`.
 
-### Statut actuel des résultats
+### Current status of results
 
-⚠️ **En attente d'exécution** : le compte Groq utilisé pour ce projet a
-atteint son quota gratuit journalier (200k tokens/jour) pendant la
-préparation de cette documentation, avant que cette évaluation ait pu
-tourner jusqu'au bout. Le script est fonctionnel (voir le fix ci-dessous)
-et sauvegarde ses résultats de façon incrémentale — relancer la commande
-ci-dessus une fois le quota reconstitué (le lendemain sur le tier gratuit,
-ou immédiatement avec un tier payant) suffit à obtenir les scores réels ;
-ce fichier sera mis à jour avec le tableau de résultats à ce moment-là.
+⚠️ **Pending a full run.** The Groq account used for this project hit its
+free-tier daily quota (200k tokens/day) while this evaluation was being
+prepared, before it could finish. The script is functional (see the fix
+below) and saves results incrementally — re-running the command above once
+the quota resets (next day on the free tier, or immediately on a paid
+tier) is enough to get real scores; this file will be updated with the
+results table at that point.
 
-**Bug corrigé au passage** : le mode JSON forcé de Groq échoue parfois à
-produire un JSON valide (guillemets typographiques non échappés dans la
-justification) et levait une `BadRequestError` non interceptée, qui faisait
-planter tout le script et perdre les résultats déjà obtenus. `llm_eval.py`
-attrape maintenant ces erreurs par question (comme le fait déjà
-`extract_entities.py` pour l'extraction du graphe) et sauvegarde après
-chaque question plutôt qu'à la toute fin.
+**Bug fixed along the way**: Groq's forced-JSON mode occasionally fails to
+produce valid JSON (unescaped typographic quotes inside the justification
+string), which raised an uncaught `BadRequestError` and crashed the whole
+script, losing every result obtained so far. `llm_eval.py` now catches
+these errors per-question (the way `extract_entities.py` already does for
+graph extraction) and saves after every question instead of only at the
+very end.
 
-## 3. Ce que ces évaluations valident dans le pipeline
+## 3. What these evaluations validate in the pipeline
 
-- Le retrieval hybride fonctionne bout-en-bout (Qdrant + BM25 + RRF) et
-  n'est pas moins bon que ses composants pris séparément.
-- Le prompt de génération force bien la citation de sources — condition
-  nécessaire (mais pas suffisante, d'où le juge LLM) pour limiter
-  l'hallucination.
-- Les deux scripts d'évaluation sont automatisés et rejouables en une
-  commande — pas une évaluation manuelle ponctuelle.
+- The hybrid retriever works end-to-end (Qdrant + BM25 + RRF) and isn't
+  worse than its components taken individually.
+- The generation prompt does enforce source citation — a necessary (but
+  not sufficient, hence the LLM judge) condition to limit hallucination.
+- Both evaluation scripts are automated and re-runnable in one command —
+  not a one-off manual check.

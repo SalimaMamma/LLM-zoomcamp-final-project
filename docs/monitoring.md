@@ -1,87 +1,87 @@
 # Monitoring
 
-Retour au [README](../README.md).
+Back to the [README](../README.md).
 
-## Comment le feedback est collecté
+## How feedback is collected
 
-Chaque réponse affichée dans l'app Streamlit ([streamlit_app/app.py](../streamlit_app/app.py))
-propose deux boutons **👍 Utile** / **👎 Pas utile**. Un clic insère une
-ligne dans la table Postgres `feedback` :
+Every answer shown in the Streamlit app ([streamlit_app/app.py](../streamlit_app/app.py))
+has two buttons, **👍 Utile** ("Useful") / **👎 Pas utile** ("Not useful").
+A click inserts a row into the Postgres `feedback` table:
 
 ```sql
 INSERT INTO feedback (question, answer, rating, retrieval_mode, latency_ms)
 VALUES (%s, %s, %s, %s, %s)
 ```
 
-`rating` (+1/-1), `retrieval_mode` (hybrid/vector/bm25/graph) et
-`latency_ms` (mesuré côté app, du clic sur "Vérifier" à la réponse générée)
-sont enregistrés à chaque fois — pas seulement un compteur agrégé, ce qui
-permet de creuser par mode ou dans le temps.
+`rating` (+1/-1), `retrieval_mode` (hybrid/vector/bm25/graph), and
+`latency_ms` (measured client-side, from clicking "Vérifier" to the
+answer being generated) are recorded every time — not just an aggregate
+counter — which makes it possible to break down by mode or over time.
 
-## Dashboard Grafana
+## Grafana dashboard
 
-Provisionné automatiquement au démarrage (`monitoring/provisioning/`,
-aucune configuration manuelle dans l'UI Grafana requise) — disponible dès
-`docker compose up -d` sur http://localhost:3001 (`admin`/`admin`),
-dossier **SciFit-Check**.
+Auto-provisioned at startup (`monitoring/provisioning/`, no manual Grafana
+UI configuration needed) — available as soon as `docker compose up -d`
+runs, at http://localhost:3001 (`admin`/`admin`), folder **SciFit-Check**.
 
-![Dashboard Grafana](images/03_grafana_dashboard.png)
+![Grafana dashboard](images/03_grafana_dashboard.png)
 
-6 panels ([JSON source](../monitoring/provisioning/dashboards/scifit_overview.json)) :
+6 panels ([source JSON](../monitoring/provisioning/dashboards/scifit_overview.json)):
 
-| Panel | Type | Source | Ce qu'il montre |
+| Panel | Type | Source | What it shows |
 |---|---|---|---|
-| Volume de questions par jour | timeseries | `feedback` | Usage dans le temps |
-| Taux de satisfaction (%) | stat | `feedback` | % de ratings positifs |
-| Latence moyenne (ms) | stat | `feedback` | Temps de réponse moyen bout-en-bout |
-| Répartition des modes de retrieval utilisés | piechart | `feedback` | hybrid vs vector vs bm25 vs graph |
-| Feedback positif vs négatif par mode | barchart | `feedback` | Qualité perçue par mode de retrieval |
-| Papiers indexés par niveau de preuve | piechart | `papers` | Composition du corpus (meta-analysis/rct/observational/unknown) |
+| Volume de questions par jour (questions/day) | timeseries | `feedback` | Usage over time |
+| Taux de satisfaction (%) (satisfaction rate) | stat | `feedback` | % of positive ratings |
+| Latence moyenne (ms) (average latency) | stat | `feedback` | End-to-end average response time |
+| Répartition des modes de retrieval utilisés (retrieval mode split) | piechart | `feedback` | hybrid vs vector vs bm25 vs graph |
+| Feedback positif vs négatif par mode (positive vs negative feedback by mode) | barchart | `feedback` | Perceived quality per retrieval mode |
+| Papiers indexés par niveau de preuve (papers by evidence level) | piechart | `papers` | Corpus composition (meta-analysis/rct/observational/unknown) |
 
-Le dernier panel ne dépend pas de la table `feedback` — il reflète l'état du
-corpus indexé et fonctionne dès l'ingestion, avant toute interaction
-utilisateur. C'est celui visible sur la capture ci-dessus : **462 papiers
-sur 561 (82%) sont classés `unknown`** — un vrai angle mort à noter
-honnêtement plutôt qu'à masquer : `classify_study_type()`
-([src/ingestion/europepmc.py](../src/ingestion/europepmc.py)) s'appuie sur
-`pubTypeList`, disponible et fiable côté Europe PMC mais absent des
-métadonnées OpenAlex, qui alimente une bonne partie du corpus — piste
-d'amélioration : classifier `study_type` par heuristique sur le titre/abstract
-pour les papiers OpenAlex, ou n'ingérer OpenAlex qu'en complément ciblé.
+The last panel doesn't depend on the `feedback` table — it reflects the
+state of the indexed corpus and works right after ingestion, before any
+user interaction. It's the one visible in the screenshot above: **462 out
+of 561 papers (82%) are classified `unknown`** — a real blind spot worth
+noting honestly rather than hiding: `classify_study_type()`
+([src/ingestion/europepmc.py](../src/ingestion/europepmc.py)) relies on
+`pubTypeList`, available and reliable from Europe PMC but absent from
+OpenAlex metadata, which feeds a large share of the corpus. Improvement
+path: classify `study_type` heuristically from title/abstract for
+OpenAlex-sourced papers, or only use OpenAlex as a targeted complement.
 
-### Les 5 autres panels (basés sur `feedback`)
+### The other 5 panels (based on `feedback`)
 
-Au moment de la rédaction de cette doc, la table `feedback` est vide (0
-interaction) et ces panels affichent "No data" — pas un bug, juste pas
-encore d'usage réel. Deux façons de les peupler :
+As of writing, the `feedback` table is empty (0 interactions) and these
+panels show "No data" — not a bug, just no real usage yet. Two ways to
+populate them:
 
-1. **Usage normal** : ouvrir l'app, poser des questions, cliquer 👍/👎.
-2. **Script de démo** ([`src/eval/seed_feedback_demo.py`](../src/eval/seed_feedback_demo.py)) :
-   fait tourner le pipeline réel (retrieval + génération Groq) sur les 8
-   questions annotées × 4 modes, et enregistre chaque interaction dans
-   `feedback` exactement comme le ferait l'app. Le rating n'est pas un avis
-   humain simulé au hasard : il est dérivé d'une vérification automatique
-   du format de réponse attendu (citation de source + ligne "niveau de
-   preuve" présentes, cf. prompt dans `src/llm/answer.py`).
+1. **Normal usage**: open the app, ask questions, click 👍/👎.
+2. **Demo seed script** ([`src/eval/seed_feedback_demo.py`](../src/eval/seed_feedback_demo.py)):
+   runs the real pipeline (retrieval + Groq generation) over the 8
+   annotated questions × 4 modes, and logs each interaction into
+   `feedback` exactly like the app would. The rating isn't a randomly
+   simulated human opinion: it's derived from an automatic check of the
+   expected answer format (source citation + "evidence level" line
+   present, per the prompt in `src/llm/answer.py`).
    ```bash
    docker compose exec app python src/eval/seed_feedback_demo.py
    ```
-   ⚠️ Consomme ~32 appels Groq — voir
-   [quota Groq](setup.md#quota-groq-gratuit) si le compte est déjà proche
-   de sa limite journalière au moment de l'exécution.
+   ⚠️ Uses ~32 Groq calls — see
+   [Groq quota](setup.md#groq-free-tier-quota) if the account is already
+   close to its daily limit when running this.
 
-Un bug de configuration a été corrigé sur les deux panels `piechart`
-pendant la préparation de cette doc : sans `reduceOptions.values: true`
-explicite, Grafana (v11) réduit toutes les lignes d'une requête table à une
-seule valeur agrégée nommée "total" au lieu de tracer une tranche par
-catégorie — visible immédiatement en testant le dashboard avec de vraies
-données plutôt qu'en committant la config à l'aveugle.
+A configuration bug was fixed on both `piechart` panels while preparing
+this documentation: without an explicit `reduceOptions.values: true`,
+Grafana (v11) collapses every row of a table query into a single
+aggregated value named "total" instead of drawing one slice per category —
+caught by actually testing the dashboard with real data rather than
+committing the config untested.
 
-## Ce qui manquerait pour aller plus loin
+## What's missing to go further
 
-- **Alerting** : Grafana le permet nativement (onglet "Alert rules" déjà
-  visible dans l'UI provisionnée) — pas configuré ici, mais un seuil sur le
-  taux de satisfaction ou la latence serait la suite logique.
-- **Logs applicatifs structurés** : actuellement seul le feedback explicite
-  est tracé ; les erreurs (ex: retrieval vide, échec Groq) ne remontent
-  qu'en `st.warning()` côté UI, pas dans une table consultable.
+- **Alerting**: Grafana supports it natively (the "Alert rules" tab is
+  already visible in the provisioned UI) — not configured here, but a
+  threshold on satisfaction rate or latency would be the logical next
+  step.
+- **Structured application logs**: currently only explicit feedback is
+  tracked; errors (e.g. empty retrieval, a failed Groq call) only surface
+  as `st.warning()` in the UI, not in a queryable table.

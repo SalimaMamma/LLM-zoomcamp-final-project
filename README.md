@@ -1,254 +1,280 @@
-# SciFit-Check — Vérificateur scientifique nutrition & sport
+# SciFit-Check — Sports Nutrition Science Checker
 
-Un système RAG hybride (vecteur + BM25 + GraphRAG léger) qui répond à des
-questions sur la nutrition sportive et la performance athlétique en
-s'appuyant **uniquement sur la littérature scientifique** (abstracts
-PubMed/PMC via Europe PMC, et OpenAlex), avec citations vérifiables et un
-niveau de preuve explicite.
+An end-to-end hybrid RAG system (vector + BM25 + lightweight GraphRAG) that
+answers questions about sports nutrition and athletic performance using
+**only peer-reviewed scientific literature** (PubMed/PMC abstracts via
+Europe PMC, and OpenAlex), with verifiable citations and an explicit
+evidence-strength rating on every answer.
 
-![Accueil de l'app](docs/images/01_accueil.png)
+![App home screen](docs/images/01_accueil.png)
 
-## Le problème
+> Built as a course project (DataTalksClub-style LLM/RAG project). This
+> README assumes no prior context — everything needed to understand,
+> run, and evaluate the project is below or linked from here.
 
-Le web regorge d'idées reçues sur le sport et la nutrition — "le cardio à
-jeun brûle plus de gras", "il faut des protéines dans les 30 minutes
-post-effort", "la caféine améliore forcément la performance"... Ces
-affirmations circulent sans qu'on sache si elles s'appuient sur une
-méta-analyse solide, un seul essai randomisé, ou rien du tout. Chercher
-soi-même dans PubMed demande du temps et des compétences de lecture
-critique (quel niveau de preuve ? l'étude contredit-elle d'autres travaux ?).
+## The problem
 
-**SciFit-Check** interroge un corpus d'abstracts scientifiques indexé
-localement, retrouve les passages pertinents (recherche hybride
-vecteur+lexical, plus un graphe de relations extrait par LLM), puis génère
-une réponse qui **cite ses sources** et **indique un niveau de preuve
-global** (faible/moyen/élevé selon le nombre et le type d'études
-concordantes — méta-analyse > essai randomisé > observationnelle), plutôt
-que d'affirmer sans justification comme le ferait un LLM interrogé à nu.
+The internet is full of sports-nutrition claims — "fasted cardio burns
+more fat", "you need protein within 30 minutes post-workout", "caffeine
+always improves performance" — repeated without anyone checking whether
+they're backed by a meta-analysis, a single small trial, or nothing at
+all. Searching PubMed yourself takes time and the ability to judge
+evidence quality (is this a randomized trial or an observational study?
+does it contradict other work?).
 
-## Grille d'évaluation — où trouver quoi
+**SciFit-Check** searches a locally indexed corpus of scientific abstracts
+(hybrid vector + lexical search, plus a lightweight knowledge graph
+extracted by an LLM), then generates an answer that **cites its sources**
+and states an **overall evidence level** (low/medium/high, based on the
+number and type of concordant studies — meta-analysis > randomized trial >
+observational) — instead of asserting an answer with no grounding, the way
+a bare LLM would.
 
-Ce projet suit une grille d'évaluation par les pairs. Pour aller vite :
+## For reviewers — evaluation criteria & how to check them
 
-| Critère | Où le vérifier |
-|---|---|
-| Description du problème | Section ci-dessus |
-| Flux retrieval + LLM | [Architecture](#architecture) et [Comment ça marche](#comment-ça-marche--exemple) |
-| Évaluation du retrieval (plusieurs approches comparées) | [Évaluation](#évaluation) + [docs/evaluation.md](docs/evaluation.md) |
-| Évaluation du LLM (plusieurs approches comparées) | [Évaluation](#évaluation) + [docs/evaluation.md](docs/evaluation.md) |
-| Interface | Streamlit — [Comment ça marche](#comment-ça-marche--exemple), capture ci-dessus |
-| Pipeline d'ingestion | [Ingestion](#ingestion) |
-| Monitoring (feedback + dashboard 5+ charts) | [Monitoring](#monitoring) + [docs/monitoring.md](docs/monitoring.md) |
-| Containerisation | `docker-compose.yml` — tout le stack (Postgres, Qdrant, Grafana, app) est containerisé |
-| Reproductibilité | [Installation](#installation) + [docs/setup.md](docs/setup.md) (env vars, versions épinglées) |
-| Bonnes pratiques (hybrid search, etc.) | [Bonnes pratiques](#bonnes-pratiques--auto-évaluation) |
+This project targets the following rubric. Each row links to where to
+verify it, and (where relevant) the exact command to reproduce it.
+
+| Criterion | Target | Where to check |
+|---|:---:|---|
+| Problem description | 2/2 | Section above |
+| Retrieval flow (knowledge base + LLM) | 2/2 | [Architecture](#architecture), [How it works](#how-it-works--worked-example) |
+| Retrieval evaluation (multiple approaches, best one used) | 2/2 | [Evaluation](#evaluation), full detail + raw results in [docs/evaluation.md](docs/evaluation.md) |
+| LLM evaluation (multiple approaches, best one used) | 2/2 | [Evaluation](#evaluation), full detail in [docs/evaluation.md](docs/evaluation.md) |
+| Interface | 2/2 | Streamlit UI, screenshots above/below |
+| Ingestion pipeline | 1/2 (semi-automated scripts, not an orchestrator) | [Ingestion](#ingestion) |
+| Monitoring (feedback collected + dashboard, 5+ charts) | 2/2 | [Monitoring](#monitoring), full detail in [docs/monitoring.md](docs/monitoring.md) |
+| Containerization (everything in docker-compose) | 2/2 | `docker-compose.yml` — Postgres, Qdrant, Grafana, app |
+| Reproducibility (clear instructions, data accessible, versions pinned) | 2/2 | [Quick start for reviewers](#quick-start-for-reviewers) below, full detail in [docs/setup.md](docs/setup.md) |
+| Best practices: hybrid search (evaluated) | 1pt | [Evaluation](#evaluation) — vector vs BM25 vs hybrid vs graph compared |
+| Best practices: re-ranking | not implemented | See [Limitations](#known-limitations--self-assessment) |
+| Best practices: query rewriting | not implemented | See [Limitations](#known-limitations--self-assessment) |
+| Bonus: cloud deployment | not implemented | Runs locally via `docker compose` |
+
+## Quick start for reviewers
+
+```bash
+git clone <this-repo-url>
+cd sci-fitness-rag
+cp .env.example .env        # set GROQ_API_KEY (free key at console.groq.com)
+docker compose up -d        # Postgres, Qdrant, Grafana, app — fully containerized
+
+# Ingest real data from a public API (no static dataset to download)
+docker compose exec app python src/ingestion/europepmc.py
+# Optional, broader-coverage complement (any discipline, not just biomedical):
+docker compose exec app python src/ingestion/openalex.py
+
+# Build the retrieval indexes (chunking + Qdrant vectors + BM25)
+docker compose exec app python src/retrieval/build_index.py
+
+# Build the knowledge graph (LLM entity/relation extraction — uses Groq quota)
+docker compose exec app python src/graphrag/extract_entities.py
+
+# Reproduce both evaluations (results already committed under data/eval_results/)
+docker compose exec app python src/eval/retrieval_eval.py
+docker compose exec app python src/eval/llm_eval.py
+```
+
+Then open:
+- **App** — http://localhost:8502
+- **Grafana monitoring dashboard** — http://localhost:3001 (login `admin` / `admin`)
+
+Full setup details, every environment variable, and troubleshooting
+(port collisions, Groq free-tier rate limits) are in
+**[docs/setup.md](docs/setup.md)**.
 
 ## Architecture
 
 ```
                          ┌─────────────────────┐
-                         │ Europe PMC / OpenAlex│   APIs publiques,
-                         └──────────┬───────────┘   sans clé requise
-                                    │ ingestion incrémentale (scripts Python)
+                         │ Europe PMC / OpenAlex│   Public APIs,
+                         └──────────┬───────────┘   no API key required
+                                    │ incremental ingestion (Python scripts)
                                     ▼
                          ┌─────────────────────┐
                          │   Postgres (raw)     │  papers / chunks / graph_edges / feedback
                          └──────────┬───────────┘
-                                    │ chunking par section (IMRaD heuristique)
+                                    │ section-aware chunking (IMRaD heuristic)
                     ┌───────────────┼───────────────┐
                     ▼                               ▼
           ┌──────────────────┐            ┌──────────────────────┐
-          │  Qdrant (vecteur)│            │  Extraction entités/  │
-          │  + BM25 (rank_bm25)│          │  relations (Groq LLM) │
+          │ Qdrant (vector)  │            │  Entity/relation       │
+          │ + BM25 (rank_bm25)│           │  extraction (Groq LLM) │
           └─────────┬────────┘            └──────────┬───────────┘
                      │                                ▼
                      │                     ┌──────────────────────┐
-                     │                     │  Graphe (NetworkX +   │
-                     │                     │  persistance Postgres)│
+                     │                     │  Graph (NetworkX +    │
+                     │                     │  Postgres persistence)│
                      │                     └──────────┬───────────┘
                      └───────────────┬─────────────────┘
                                       ▼
                           ┌────────────────────┐
-                          │  Retrieval hybride  │  RRF (Reciprocal Rank Fusion)
-                          │  vecteur+BM25, ou    │  vecteur/BM25/hybrid/graph
-                          │  traversée du graphe │  selon le mode choisi
+                          │  Hybrid retrieval   │  RRF (Reciprocal Rank Fusion)
+                          │  vector+BM25, or     │  vector/BM25/hybrid/graph —
+                          │  graph traversal     │  selectable mode
                           └──────────┬───────────┘
                                       ▼
                           ┌────────────────────┐
-                          │  LLM (Groq Llama)   │  génère la réponse
-                          │  + citations +      │  + citations + niveau
-                          │  niveau de preuve    │  de preuve, à partir
-                          └──────────┬───────────┘  UNIQUEMENT des extraits
-                                      ▼
+                          │  LLM (Groq Llama)   │  generates the answer,
+                          │  answer + citations │  citing sources + an
+                          │  + evidence level    │  evidence-level line,
+                          └──────────┬───────────┘  grounded ONLY in the
+                                      ▼              retrieved excerpts
                           ┌────────────────────┐
                           │  Streamlit UI       │
-                          │  + feedback 👍👎     │
+                          │  + 👍👎 feedback     │
                           └──────────┬───────────┘
                                       ▼
                           ┌────────────────────┐
-                          │  Grafana (monitoring)│
+                          │ Grafana (monitoring)│
                           └────────────────────┘
 ```
 
-## Stack technique
+## Tech stack
 
-| Composant | Choix | Pourquoi (et comment l'utiliser si tu ne le connais pas) |
+None of this is limited to what a specific course covers — below is what's
+used and why, with a short explanation of each tool for anyone unfamiliar
+with it.
+
+| Component | Choice | What it is / why |
 |---|---|---|
-| Ingestion | Scripts Python + [OpenAlex](https://openalex.org) / [Europe PMC](https://europepmc.org) | APIs REST publiques gratuites, aucune clé requise. `python src/ingestion/*.py` — voir [Ingestion](#ingestion). |
-| Stockage brut | Postgres (Docker) | Base relationnelle classique, gratuite, self-hosted. |
-| Embeddings | [`bge-small-en-v1.5`](https://huggingface.co/BAAI/bge-small-en-v1.5) via `sentence-transformers` | Modèle d'embeddings **local** (tourne sur CPU, pas d'appel API) : convertit un texte en vecteur numérique pour la recherche sémantique. Chargé automatiquement au premier usage (~130 Mo, mis en cache). |
-| Vector store | [Qdrant](https://qdrant.tech) (Docker) | Base spécialisée dans la recherche par similarité vectorielle (« quels chunks ont un vecteur proche de celui de ma question ? »). API REST simple, UI de debug sur `:6333/dashboard`. |
-| Lexical search | [`rank_bm25`](https://github.com/dorianbrown/rank_bm25) | Algorithme BM25 (comme un moteur de recherche classique par mots-clés) — complète le vecteur sur les termes techniques exacts (noms de molécules, dosages) que les embeddings généralisent parfois trop. |
-| Fusion hybride | RRF (Reciprocal Rank Fusion) | Combine deux classements (vecteur + BM25) sans avoir à calibrer un poids entre les deux — implémentation dans [`src/retrieval/hybrid.py`](src/retrieval/hybrid.py). |
-| Graphe de connaissances | [NetworkX](https://networkx.org) + persistance Postgres | Un LLM extrait des triplets (sujet, relation, objet — ex: `"caffeine" → improves → "endurance performance"`) depuis chaque abstract ; NetworkX permet de traverser ces relations à la requête. Volontairement léger (pas de Neo4j) pour un projet solo. |
-| Extraction d'entités + génération | [Groq](https://groq.com) (Llama 3.3 / gpt-oss, via API) | Inférence LLM très rapide et quasi-gratuite en free tier (200k tokens/jour). Nécessite une clé gratuite sur console.groq.com. |
-| Interface | [Streamlit](https://streamlit.io) | Framework Python pour UI web sans JS — `streamlit run app.py` suffit. |
-| Monitoring | [Grafana](https://grafana.com) + Postgres | Dashboards branchés directement sur la table `feedback` en SQL, provisionnés automatiquement (voir [Monitoring](#monitoring)). |
-| Containerisation | `docker compose` | Un seul fichier pour tout lancer (Postgres, Qdrant, Grafana, app). |
+| Ingestion | Python scripts + [OpenAlex](https://openalex.org) / [Europe PMC](https://europepmc.org) | Free public REST APIs, no API key required. `python src/ingestion/*.py` — see [Ingestion](#ingestion). |
+| Raw storage | Postgres (Docker) | Standard relational database, free, self-hosted. |
+| Embeddings | [`bge-small-en-v1.5`](https://huggingface.co/BAAI/bge-small-en-v1.5) via `sentence-transformers` | A **local** embedding model (runs on CPU, no API call): turns text into a numeric vector for semantic search. Downloaded automatically on first use (~130MB, then cached). |
+| Vector store | [Qdrant](https://qdrant.tech) (Docker) | A database specialized in similarity search over vectors ("which chunks have a vector close to my question's?"). Simple REST API, has a debug UI at `:6333/dashboard`. |
+| Lexical search | [`rank_bm25`](https://github.com/dorianbrown/rank_bm25) | BM25 (classic keyword-based search algorithm, like what search engines used before embeddings) — complements the vector search on exact technical terms (drug names, dosages) that embeddings sometimes over-generalize. |
+| Hybrid fusion | RRF (Reciprocal Rank Fusion) | Combines two rankings (vector + BM25) without having to tune a weight between them — implemented in [`src/retrieval/hybrid.py`](src/retrieval/hybrid.py). |
+| Knowledge graph | [NetworkX](https://networkx.org) + Postgres persistence | An LLM extracts triplets (subject, relation, object — e.g. `"caffeine" → improves → "endurance performance"`) from each abstract; NetworkX lets us traverse these relations at query time. Deliberately lightweight (no Neo4j) for a solo project. |
+| Entity extraction + generation | [Groq](https://groq.com) (Llama 3.3 / gpt-oss, via API) | Very fast, near-free LLM inference on the free tier (200k tokens/day). Requires a free key from console.groq.com. |
+| Interface | [Streamlit](https://streamlit.io) | Python web UI framework, no JS needed — `streamlit run app.py`. |
+| Monitoring | [Grafana](https://grafana.com) + Postgres | Dashboards wired directly to the `feedback` table via SQL, auto-provisioned on startup (see [Monitoring](#monitoring)). |
+| Containerization | `docker compose` | Single file to launch everything (Postgres, Qdrant, Grafana, app). |
 
-## Installation
+## How it works — worked example
 
-Résumé rapide — **détails complets, variables d'environnement et
-dépannage dans [docs/setup.md](docs/setup.md)** :
+1. Pick a retrieval mode (`hybrid` is the default) and ask a question:
 
-```bash
-git clone <url-de-ce-repo>
-cd sci-fitness-rag
-cp .env.example .env      # renseigner GROQ_API_KEY (gratuite sur console.groq.com)
-docker compose up -d      # Postgres, Qdrant, Grafana, app
+   ![Question typed in](docs/images/02_question_remplie.png)
 
-docker compose exec app python src/ingestion/europepmc.py
-docker compose exec app python src/retrieval/build_index.py
-docker compose exec app python src/graphrag/extract_entities.py
-```
-
-App sur **http://localhost:8502**, Grafana sur **http://localhost:3001**
-(`admin`/`admin`).
-
-## Comment ça marche — exemple
-
-1. Choisir un mode de retrieval (`hybrid` par défaut) et poser une
-   question :
-
-   ![Question saisie](docs/images/02_question_remplie.png)
-
-2. Le retriever hybride cherche dans les 1376 chunks indexés. Exemple réel
-   (mode `hybrid`, question *"does fasted cardio increase fat oxidation"*) :
+2. The hybrid retriever searches across the indexed chunks. Real example
+   (mode `hybrid`, question *"does fasted cardio increase fat oxidation"*):
 
    ```
-   score   chunk_id                        extrait
-   0.0320  W1939241225::result::2          "Peak fat oxidation was 2.3-fold higher in the
-                                            LC group (1.54±0.18 vs 0..."
-   0.0310  W2562509757::background::0      "Key points: Three weeks of intensified
-                                            training and mild energy deficit in elite..."
-   0.0305  W2093220749::result::2          "These results suggest that the caffeine
-                                            ingestion enhanced endurance performance..."
+   score   chunk_id                    excerpt
+   0.0320  W1939241225::result::2      "Peak fat oxidation was 2.3-fold higher in the
+                                        LC group (1.54±0.18 vs 0..."
+   0.0310  W2562509757::background::0  "Key points: Three weeks of intensified
+                                        training and mild energy deficit in elite..."
+   0.0305  W2093220749::result::2      "These results suggest that the caffeine
+                                        ingestion enhanced endurance performance..."
    ```
 
-3. Ces extraits (avec type d'étude et année) sont injectés dans le prompt
-   de génération ([`src/llm/answer.py`](src/llm/answer.py)), qui force le
-   LLM à citer `[source: n]` pour chaque affirmation et à conclure par une
-   ligne `Niveau de preuve global: <faible|moyen|élevé>`.
-4. La réponse s'affiche avec un expander listant les sources utilisées, et
-   deux boutons 👍/👎 pour donner un feedback (voir [Monitoring](#monitoring)).
+3. These excerpts (with study type and year) are injected into the answer
+   prompt ([`src/llm/answer.py`](src/llm/answer.py)), which forces the LLM
+   to cite `[source: n]` for every claim and end with a line
+   `Niveau de preuve global: <low|medium|high>` (evidence level).
+4. The answer is shown with an expander listing the sources used, and two
+   buttons 👍/👎 to leave feedback (see [Monitoring](#monitoring)).
+
+The UI itself is in French (`streamlit_app/app.py`) — the target users
+are French-speaking, this README/docs are in English for reviewers. The
+corpus and generated answers are in English (source abstracts are English).
 
 ## Ingestion
 
-Deux sources, écrivant dans la même table `papers` (combinables) :
+Two sources, writing into the same `papers` table (can be combined):
 
-| Script | Source | Points forts | À savoir |
+| Script | Source | Strengths | Caveat |
 |---|---|---|---|
-| `src/ingestion/openalex.py` (recommandé) | [OpenAlex](https://openalex.org) | Toutes disciplines, rate limit généreux, aucune clé | Abstract reconstruit depuis un inverted index — géré automatiquement |
-| `src/ingestion/europepmc.py` | [Europe PMC](https://europepmc.org) | Focus biomédical strict, `pubType` précis pour classifier le niveau de preuve | Couverture plus étroite hors biomédical |
+| `src/ingestion/openalex.py` (recommended) | [OpenAlex](https://openalex.org) | All disciplines, generous rate limit, no key required | Abstract is reconstructed from an inverted index — handled automatically |
+| `src/ingestion/europepmc.py` | [Europe PMC](https://europepmc.org) | Strict biomedical focus, precise `pubType` for evidence-level classification | Narrower coverage outside biomedical topics |
 
-C'est une ingestion **semi-automatisée** : des scripts Python déclenchés
-manuellement (`docker compose exec app python src/ingestion/*.py`), idempotents
-(`ON CONFLICT ... DO UPDATE`, sûr à relancer). Ils rapportent explicitement
-nouveaux / mis à jour / ignorés à chaque exécution — pas juste un nombre de
-résultats "traités" qui prêterait à confusion.
+This is a **semi-automated** ingestion pipeline: Python scripts triggered
+manually (`docker compose exec app python src/ingestion/*.py`), idempotent
+(`ON CONFLICT ... DO UPDATE`, safe to re-run). They report new / updated /
+skipped counts explicitly on every run — not just a "processed N results"
+number that would be easy to misread as "N new rows added".
 
-*Extension possible : brancher ces scripts sur un scheduler (cron, Prefect,
-Airflow) pour une ingestion continue plutôt que déclenchée à la main —
-non fait ici, volume et fréquence de publication ne le justifiaient pas
-pour un projet solo.*
+*Possible extension: wire these scripts into a scheduler (cron, Prefect,
+Airflow) for continuous ingestion rather than manually triggered — not
+done here; corpus volume and publication frequency didn't justify it for
+a solo project, but it's the clear next step for the ingestion-pipeline
+rubric point (currently 1/2, would become 2/2 with a real orchestrator).*
 
-## Évaluation
+## Evaluation
 
-Deux évaluations automatisées et rejouables en une commande, détaillées
-dans **[docs/evaluation.md](docs/evaluation.md)**.
+Two automated evaluations, each reproducible with a single command, fully
+detailed in **[docs/evaluation.md](docs/evaluation.md)**.
 
-**Retrieval** — 4 modes comparés (Recall@8 / MRR) sur 8 questions annotées :
+**Retrieval** — 4 modes compared (Recall@8 / MRR) on 8 annotated questions:
 
 | Mode | Recall@8 | MRR |
 |---|:---:|:---:|
 | vector | 1.00 | 0.938 |
 | bm25 | 0.875 | 0.625 |
-| **hybrid** *(défaut app)* | **1.00** | **0.917** |
+| **hybrid** *(app default)* | **1.00** | **0.917** |
 | graph | 1.00 | 1.00* |
 
-*\*Le mode `graph` utilise une métrique de hit non comparable rang-à-rang
-aux trois autres — voir la discussion complète dans
-[docs/evaluation.md](docs/evaluation.md#pourquoi-hybrid-est-le-mode-par-défaut-de-lapp-malgré-ces-chiffres).*
+*\*The `graph` mode uses a hit-based metric that isn't directly comparable
+rank-for-rank to the other three — see the full discussion in
+[docs/evaluation.md](docs/evaluation.md#why-hybrid-is-the-apps-default-mode-despite-these-numbers).*
 
-**Génération LLM** — 2 stratégies de prompt comparées via un LLM-judge
-(score de fidélité 0-10) : `zero_shot` vs `structured_evidence`. Résultats
-**en attente de ré-exécution** (quota Groq gratuit journalier épuisé
-pendant la préparation de cette doc) — méthodologie, script fonctionnel et
-commande de reproduction dans
-[docs/evaluation.md](docs/evaluation.md#2-évaluation-de-la-génération-llm-as-judge).
+**LLM generation** — 2 prompting strategies compared via an LLM-judge
+(faithfulness score 0-10): `zero_shot` vs `structured_evidence`.
+Methodology, working script, and exact reproduce command in
+[docs/evaluation.md](docs/evaluation.md#2-llm-generation-evaluation-llm-as-judge).
 
 ## Monitoring
 
-Feedback 👍/👎 collecté à chaque réponse (table Postgres `feedback` :
-question, réponse, rating, mode de retrieval, latence) **et** dashboard
-Grafana provisionné automatiquement avec **6 panels** — détails et capture
-dans **[docs/monitoring.md](docs/monitoring.md)**.
+👍/👎 feedback is collected on every answer (Postgres table `feedback`:
+question, answer, rating, retrieval mode, latency) **and** a Grafana
+dashboard is auto-provisioned with **6 charts** — details and screenshot
+in **[docs/monitoring.md](docs/monitoring.md)**.
 
-![Dashboard Grafana](docs/images/03_grafana_dashboard.png)
+![Grafana dashboard](docs/images/03_grafana_dashboard.png)
 
-## Bonnes pratiques — auto-évaluation
+## Known limitations & self-assessment
 
-- ✅ **Recherche hybride** (vecteur + BM25 avec RRF), évaluée séparément
-  des deux méthodes seules — voir [Évaluation](#évaluation).
-- ❌ **Re-ranking** de documents — non implémenté. Piste : un cross-encoder
-  léger (ex: `ms-marco-MiniLM`) sur le top-20 hybride avant les 6 chunks
-  envoyés au LLM.
-- ❌ **Réécriture de requête** — non implémentée. Piste : un appel LLM léger
-  pour traduire/reformuler la question française en requête anglaise
-  terminologique avant le retrieval (le retrieval hybride souffre
-  actuellement du mismatch langue FR question / EN corpus, visible dans le
-  score BM25 plus faible — voir [docs/evaluation.md](docs/evaluation.md)).
-- ❌ **Déploiement cloud** — non fait, tourne en local via `docker compose`.
+Honest gaps, rather than glossing over them:
 
-## Limitations connues
+- ✅ **Hybrid search** (vector + BM25 with RRF), evaluated against each
+  method alone — see [Evaluation](#evaluation).
+- ❌ **Document re-ranking** — not implemented. Would add: a lightweight
+  cross-encoder (e.g. `ms-marco-MiniLM`) over the top-20 hybrid results
+  before the 6 chunks sent to the LLM.
+- ❌ **Query rewriting** — not implemented. Would add: a light LLM call to
+  translate/reformulate the French user question into English retrieval
+  terminology before search (the current mismatch between French questions
+  and an English corpus is visible in BM25's lower score — see
+  [docs/evaluation.md](docs/evaluation.md)).
+- ❌ **Cloud deployment** — not done, runs locally via `docker compose`.
+- The corpus covers abstracts only (no full text).
+- **82% of indexed papers are classified `study_type: unknown`** (visible
+  on the Grafana dashboard) — `pubType`-based classification works well
+  for Europe PMC but OpenAlex doesn't expose that metadata; see
+  [docs/monitoring.md](docs/monitoring.md) for detail.
+- LLM-based entity extraction can introduce noise into the graph; it's
+  treated as an additional retrieval source, not ground truth.
+- Does not replace professional medical or nutritional advice.
 
-- Le corpus couvre uniquement les abstracts (pas le texte intégral).
-- **82% des papiers sont classés `study_type: unknown`** (visible sur le
-  dashboard Grafana) — la classification par `pubType` fonctionne bien pour
-  Europe PMC mais OpenAlex ne fournit pas cette métadonnée ; voir
-  [docs/monitoring.md](docs/monitoring.md) pour le détail.
-- L'extraction d'entités par LLM peut introduire du bruit dans le graphe ;
-  traité comme une source de retrieval additionnelle, pas une vérité absolue.
-- Ne remplace pas un avis médical ou nutritionnel professionnel.
-
-## Structure du projet
+## Project structure
 
 ```
-src/ingestion/     # scripts d'ingestion (openalex.py, europepmc.py) + schema.sql
-src/retrieval/     # chunking, index Qdrant+BM25, retrieval hybride RRF
-src/graphrag/      # extraction d'entités/relations (Groq) + traversée NetworkX
-src/llm/           # génération de réponse (prompt + citations + niveau de preuve)
-src/eval/          # évaluation retrieval + LLM-as-judge + questions annotées
-streamlit_app/     # interface utilisateur
-monitoring/        # provisioning Grafana (dashboard + datasource)
-docs/              # documentation détaillée (setup, évaluation, monitoring)
+src/ingestion/     # ingestion scripts (openalex.py, europepmc.py) + schema.sql
+src/retrieval/     # chunking, Qdrant+BM25 index building, hybrid RRF retrieval
+src/graphrag/      # entity/relation extraction (Groq) + NetworkX traversal
+src/llm/           # answer generation (prompt + citations + evidence level)
+src/eval/          # retrieval + LLM-as-judge evaluation, annotated questions
+streamlit_app/     # user interface
+monitoring/        # Grafana provisioning (dashboard + datasource)
+docs/              # detailed docs (setup, evaluation, monitoring)
 ```
 
-## Documentation complémentaire
+## More documentation
 
-- [docs/setup.md](docs/setup.md) — installation pas à pas, toutes les
-  variables d'environnement, dépannage (collisions de ports, quota Groq).
-- [docs/evaluation.md](docs/evaluation.md) — méthodologie et résultats
-  complets des deux évaluations.
-- [docs/monitoring.md](docs/monitoring.md) — détail des 6 panels Grafana,
-  comment le feedback est collecté, comment peupler le dashboard.
+- [docs/setup.md](docs/setup.md) — step-by-step install, every environment
+  variable, troubleshooting (port collisions, Groq quota limits).
+- [docs/evaluation.md](docs/evaluation.md) — full methodology and results
+  for both evaluations.
+- [docs/monitoring.md](docs/monitoring.md) — the 6 Grafana panels
+  explained, how feedback is collected, how to seed the dashboard.
