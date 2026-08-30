@@ -99,15 +99,33 @@ def main():
     client = Groq(api_key=os.getenv("GROQ_API_KEY"))
     model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
-    results = {key: [] for key in PROMPT_STRATEGIES}
     os.makedirs(RESULTS_DIR, exist_ok=True)
     out_path = os.path.join(RESULTS_DIR, "llm_eval.json")
+
+    # reprise : un run précédent interrompu (ex: rate limit) ne doit pas
+    # être écrasé par un nouveau run qui échouerait encore plus tôt -> on
+    # charge ce qui existe déjà et on saute les (question, stratégie) déjà
+    # évaluées.
+    if os.path.exists(out_path):
+        with open(out_path, encoding="utf-8") as f:
+            results = json.load(f)
+        for key in PROMPT_STRATEGIES:
+            results.setdefault(key, [])
+    else:
+        results = {key: [] for key in PROMPT_STRATEGIES}
+    done = {
+        (key, entry["question"])
+        for key in PROMPT_STRATEGIES
+        for entry in results[key]
+    }
 
     for q in questions:
         chunks = retriever.search(q["question"], top_k=6, mode="hybrid")
         context = format_context(chunks)
 
         for strategy_key in PROMPT_STRATEGIES:
+            if (strategy_key, q["question"]) in done:
+                continue  # déjà évalué lors d'un run précédent
             answer = generate_with_strategy(client, model, strategy_key, q["question"], context)
             if answer is None:
                 continue  # appel échoué (ex: rate limit) -> on ne compte pas cette question

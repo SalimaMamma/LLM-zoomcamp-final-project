@@ -89,15 +89,46 @@ docker compose exec app python src/eval/llm_eval.py
 ```
 Raw results: `data/eval_results/llm_eval.json`.
 
-### Current status of results
+### Results (partial — 4 of 8 questions)
 
-⚠️ **Pending a full run.** The Groq account used for this project hit its
-free-tier daily quota (200k tokens/day) while this evaluation was being
-prepared, before it could finish. The script is functional (see the fix
-below) and saves results incrementally — re-running the command above once
-the quota resets (next day on the free tier, or immediately on a paid
-tier) is enough to get real scores; this file will be updated with the
-results table at that point.
+The Groq account used for this project hit its free-tier daily quota
+(200k tokens/day) mid-run while preparing this documentation, so only 4 of
+the 8 annotated questions completed for `zero_shot` and 3 of 8 for
+`structured_evidence` before calls started failing with `429`. Real
+scores, not placeholders:
+
+| Strategy | n | Avg. faithfulness |
+|---|:---:|:---:|
+| `zero_shot` | 4/8 | **9.5 / 10** |
+| `structured_evidence` | 3/8 | 8.3 / 10 |
+
+Full answers and per-question justifications:
+[`data/eval_results/llm_eval.json`](../data/eval_results/llm_eval.json).
+
+On this partial sample, the simpler `zero_shot` prompt scores slightly
+higher than the more elaborate `structured_evidence` one — the one
+docked point (structured_evidence, protein-timing question, 7/10) came
+from the model asserting a general claim ("a 30-min window isn't strictly
+required") that wasn't directly stated in the retrieved excerpts, even
+though the per-source evidence it cited was accurate. This lines up with
+the production prompt in [`src/llm/answer.py`](../src/llm/answer.py),
+which follows the same free-form-with-citations pattern as `zero_shot`
+rather than the more structured 3-part format.
+
+**Script functional, incremental save confirmed working**: the crash that
+used to lose every result on a single rate-limit error (see fix below) is
+what made it possible to keep these 4-7 results instead of losing the
+whole run — direct evidence the fix works, not just a claim. Re-running
+```bash
+docker compose exec app python src/eval/llm_eval.py
+```
+once the quota resets will fill in the remaining questions without
+discarding what's already here: the script now loads any existing
+`llm_eval.json` first and skips `(question, strategy)` pairs already
+present, the same resume-on-rerun pattern `extract_entities.py` already
+used for the graph. This was added specifically because the first
+partial run above is worth protecting from being overwritten by a second
+run that fails even earlier.
 
 **Bug fixed along the way**: Groq's forced-JSON mode occasionally fails to
 produce valid JSON (unescaped typographic quotes inside the justification
