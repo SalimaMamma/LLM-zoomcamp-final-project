@@ -1,0 +1,92 @@
+{
+  "title": "SciFit-Check — Vue d'ensemble",
+  "timezone": "browser",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Volume de questions par jour",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [
+        {
+          "rawSql": "SELECT date_trunc('day', created_at) AS time, count(*) AS questions FROM feedback GROUP BY 1 ORDER BY 1",
+          "format": "time_series"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Taux de satisfaction (%)",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0},
+      "targets": [
+        {
+          "rawSql": "SELECT (sum(CASE WHEN rating = 1 THEN 1 ELSE 0 END)::float / NULLIF(count(*),0) * 100) AS satisfaction FROM feedback",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Latence moyenne (ms)",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
+      "targets": [
+        {
+          "rawSql": "SELECT avg(latency_ms) AS latency FROM feedback",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Répartition des modes de retrieval utilisés",
+      "type": "piechart",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
+      "targets": [
+        {
+          "rawSql": "SELECT retrieval_mode, count(*) AS total FROM feedback GROUP BY retrieval_mode",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "reduceOptions": {"values": true, "calcs": [], "fields": "/^total$/"},
+        "pieType": "pie",
+        "displayLabels": ["name", "percent"],
+        "legend": {"displayMode": "table", "placement": "right", "values": ["value"]}
+      }
+    },
+    {
+      "id": 5,
+      "title": "Feedback positif vs négatif par mode",
+      "type": "barchart",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
+      "targets": [
+        {
+          "rawSql": "SELECT retrieval_mode, sum(CASE WHEN rating = 1 THEN 1 ELSE 0 END) AS positif, sum(CASE WHEN rating = -1 THEN 1 ELSE 0 END) AS negatif FROM feedback GROUP BY retrieval_mode",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Papiers indexés par niveau de preuve",
+      "type": "piechart",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
+      "targets": [
+        {
+          "rawSql": "SELECT study_type, count(*) AS total FROM papers GROUP BY study_type",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "reduceOptions": {"values": true, "calcs": [], "fields": "/^total$/"},
+        "pieType": "pie",
+        "displayLabels": ["name", "percent"],
+        "legend": {"displayMode": "table", "placement": "right", "values": ["value"]}
+      }
+    }
+  ],
+  "schemaVersion": 39,
+  "version": 1
+}

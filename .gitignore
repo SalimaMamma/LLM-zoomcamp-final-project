@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+# index vectoriel/BM25 régénérable via `python src/retrieval/build_index.py` :
+# volontairement pas versionné, contrairement aux résultats d'évaluation
+# (data/eval_results/) qu'on garde pour que les reviewers voient les scores
+# réels sans devoir tout relancer.
+data/*.pkl
+.venv/

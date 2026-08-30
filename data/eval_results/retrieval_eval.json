@@ -1,0 +1,22 @@
+[
+  {
+    "mode": "vector",
+    "recall@8": 1.0,
+    "mrr": 0.9375
+  },
+  {
+    "mode": "bm25",
+    "recall@8": 0.875,
+    "mrr": 0.625
+  },
+  {
+    "mode": "hybrid",
+    "recall@8": 1.0,
+    "mrr": 0.9166666666666666
+  },
+  {
+    "mode": "graph",
+    "recall@8": 1.0,
+    "mrr": 1.0
+  }
+]

@@ -1,0 +1,34 @@
+[
+  {
+    "question": "Le jeûne intermittent améliore-t-il la performance en endurance ?",
+    "expected_keywords": ["fasting", "endurance", "performance"]
+  },
+  {
+    "question": "Faut-il consommer des protéines dans les 30 minutes après l'effort ?",
+    "expected_keywords": ["protein", "timing", "synthesis"]
+  },
+  {
+    "question": "La caféine améliore-t-elle vraiment la performance sportive ?",
+    "expected_keywords": ["caffeine", "performance"]
+  },
+  {
+    "question": "La créatine est-elle efficace pour la force musculaire ?",
+    "expected_keywords": ["creatine", "strength"]
+  },
+  {
+    "question": "Le cardio à jeun brûle-t-il plus de graisses ?",
+    "expected_keywords": ["fasted", "fat oxidation"]
+  },
+  {
+    "question": "Le chargement en glucides améliore-t-il la performance sur marathon ?",
+    "expected_keywords": ["carbohydrate", "marathon", "performance"]
+  },
+  {
+    "question": "Quelle est la stratégie d'hydratation recommandée pour l'endurance ?",
+    "expected_keywords": ["hydration", "endurance"]
+  },
+  {
+    "question": "Les BCAA sont-ils utiles pendant l'exercice ?",
+    "expected_keywords": ["branched", "amino acids", "exercise"]
+  }
+]
