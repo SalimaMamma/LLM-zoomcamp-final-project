@@ -1,6 +1,7 @@
 {
   "title": "SciFit-Check — Vue d'ensemble",
   "timezone": "browser",
+  "time": {"from": "now-30d", "to": "now"},
   "panels": [
     {
       "id": 1,

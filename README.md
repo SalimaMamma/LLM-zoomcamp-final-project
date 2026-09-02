@@ -174,7 +174,9 @@ with it.
    to cite `[source: n]` for every claim and end with a line
    `Niveau de preuve global: <low|medium|high>` (evidence level).
 4. The answer is shown with an expander listing the sources used, and two
-   buttons 👍/👎 to leave feedback (see [Monitoring](#monitoring)).
+   buttons 👍/👎 to leave feedback (see [Monitoring](#monitoring)):
+
+   ![Full answer with sources](docs/images/02b_reponse_complete.png)
 
 The UI itself is in French (`streamlit_app/app.py`) — the target users
 are French-speaking, this README/docs are in English for reviewers. The
