@@ -1,25 +1,24 @@
 """
 Script de démo/seed : fait tourner le pipeline réel (retrieval + génération)
 sur les questions annotées, à travers les différents modes, et enregistre le
-résultat dans la table `feedback` exactement comme le fait l'app Streamlit
-(streamlit_app/app.py::log_feedback), pour avoir des données réalistes à
-montrer sur le dashboard Grafana.
+résultat dans `feedback` ET `retrieval_log` exactement comme le fait l'app
+Streamlit (streamlit_app/app.py), pour avoir des données réalistes à montrer
+sur le dashboard Grafana (feedback simulé + observabilité : latence par
+étape, tokens, scores de retrieval, diversité des sources...).
 
 Ce n'est PAS un générateur de fausses données : chaque ligne vient d'un vrai
 appel au retriever hybride + au LLM Groq. Le rating (👍/👎) n'est pas un
-avis humain réel (aucun humain n'a jugé ces réponses) — il est dérivé d'une
-vérification automatique et déterministe du format attendu (citation d'au
-moins une source + ligne "Niveau de preuve global" présente, cf. prompt
-dans src/llm/answer.py). Ce script sert à peupler le dashboard Grafana pour
-la démo ; en usage réel, le rating vient des clics 👍/👎 des utilisateurs
-dans l'app Streamlit.
+avis humain réel (aucun humain n'a jugé ces réponses) — il est dérivé des
+mêmes vérifications automatiques et déterministes que l'app utilise pour son
+propre monitoring (src/llm/answer.py::is_declined_answer /
+is_well_formatted_answer). En usage réel, le rating vient des clics 👍/👎
+des utilisateurs dans l'app Streamlit.
 
 Usage:
     python src/eval/seed_feedback_demo.py
 """
 import json
 import os
-import re
 import sys
 import time
 
@@ -32,7 +31,11 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "llm"))
 
 from hybrid import HybridRetriever  # noqa: E402
 from graph_store import KnowledgeGraph  # noqa: E402
-from answer import generate_answer  # noqa: E402
+from answer import (  # noqa: E402
+    generate_answer_with_usage,
+    is_declined_answer,
+    is_well_formatted_answer,
+)
 
 load_dotenv()
 
@@ -50,35 +53,12 @@ def get_connection():
     )
 
 
-NO_EVIDENCE_MARKERS = (
-    "ne contiennent aucune information",
-    "ne permettent pas de répondre",
-    "ne traite du",
-    "ne traitent du",
-    "aucun des extraits",
-    "aucune donnée",
-)
-
-
-def format_compliant_rating(answer: str) -> int:
-    """Vérification automatique et déterministe (pas un jugement humain) :
-
-    - la réponse cite au moins une source (le prompt demande "[source: n]",
-      mais le modèle utilise parfois juste "[n]" -> les deux comptent) ET
-      affiche la ligne de niveau de preuve -> positif ;
-    - la réponse décline explicitement faute de source pertinente (comportement
-      voulu par le prompt : "dis-le explicitement plutôt que d'inventer") ->
-      positif aussi, ce n'est pas un échec de format, c'est le comportement
-      demandé ;
-    - sinon -> négatif (réponse qui n'affiche ni citation, ni aveu d'absence
-      de source, ni niveau de preuve -> signal de mauvais format).
-    """
-    lowered = answer.lower()
-    if any(marker in lowered for marker in NO_EVIDENCE_MARKERS):
+def rating_from_answer(answer: str) -> int:
+    """Positif si bien formatée OU si elle décline explicitement faute de
+    source (comportement voulu, pas un échec) ; négatif sinon."""
+    if is_declined_answer(answer) or is_well_formatted_answer(answer):
         return 1
-    has_citation = bool(re.search(r"\[(?:source\s*:\s*)?\d+\]", answer, re.IGNORECASE))
-    has_evidence_line = "niveau de preuve" in lowered
-    return 1 if (has_citation and has_evidence_line) else -1
+    return -1
 
 
 def log_feedback(cur, question, answer, rating, mode, latency_ms):
@@ -88,6 +68,25 @@ def log_feedback(cur, question, answer, rating, mode, latency_ms):
         VALUES (%s, %s, %s, %s, %s)
         """,
         (question, answer, rating, mode, latency_ms),
+    )
+
+
+def log_retrieval(cur, **kw):
+    cur.execute(
+        """
+        INSERT INTO retrieval_log (
+            question, retrieval_mode, embedding_ms, search_ms, generation_ms,
+            prompt_tokens, completion_tokens, avg_chunk_score, min_chunk_score,
+            chunk_count, paper_ids, answer_length, is_declined, is_well_formatted,
+            is_error, error_message
+        ) VALUES (
+            %(question)s, %(retrieval_mode)s, %(embedding_ms)s, %(search_ms)s, %(generation_ms)s,
+            %(prompt_tokens)s, %(completion_tokens)s, %(avg_chunk_score)s, %(min_chunk_score)s,
+            %(chunk_count)s, %(paper_ids)s, %(answer_length)s, %(is_declined)s, %(is_well_formatted)s,
+            %(is_error)s, %(error_message)s
+        )
+        """,
+        kw,
     )
 
 
@@ -104,31 +103,75 @@ def main():
     total = 0
     for q in questions:
         for mode in MODES:
-            start = time.time()
+            embedding_ms, search_ms = 0, 0
             if mode == "graph":
+                t0 = time.time()
                 relations = kg.get_relations_for_entity(q["expected_keywords"][0])
+                search_ms = int((time.time() - t0) * 1000)
                 chunks = [
-                    {"content": f"{r['subject']} {r['relation']} {r['object']}",
-                     "study_type": "graph_relation", "year": "-"}
+                    {
+                        "content": f"{r['subject']} {r['relation']} {r['object']}",
+                        "study_type": "graph_relation",
+                        "year": "-",
+                        "paper_id": r.get("paper_id"),
+                    }
                     for r in relations
                 ]
             else:
                 chunks = retriever.search(q["question"], top_k=6, mode=mode)
+                embedding_ms = retriever.last_timing["embedding_ms"]
+                search_ms = retriever.last_timing["search_ms"]
+
+            scores = [c["score"] for c in chunks if "score" in c]
+            paper_ids = list({c["paper_id"] for c in chunks if c.get("paper_id")})
+            common = dict(
+                question=q["question"],
+                retrieval_mode=mode,
+                embedding_ms=embedding_ms,
+                search_ms=search_ms,
+                avg_chunk_score=sum(scores) / len(scores) if scores else None,
+                min_chunk_score=min(scores) if scores else None,
+                chunk_count=len(chunks),
+                paper_ids=paper_ids or None,
+            )
 
             if not chunks:
+                log_retrieval(
+                    cur, **common, generation_ms=None, prompt_tokens=None,
+                    completion_tokens=None, answer_length=None, is_declined=None,
+                    is_well_formatted=None, is_error=False, error_message=None,
+                )
+                print(f"[{mode:6s}] {q['question'][:50]:50s} -> pas de résultat (0 chunk)")
                 continue
 
             try:
-                answer = generate_answer(q["question"], chunks)
+                answer, usage, generation_ms = generate_answer_with_usage(q["question"], chunks)
             except Exception as e:
-                # rate limit (TPM/TPD) ou autre erreur Groq -> on saute cette
-                # interaction plutôt que de perdre tout le seeding déjà fait
+                # rate limit (TPM/TPD) ou autre erreur Groq -> on logue l'échec
+                # et on continue plutôt que de perdre tout le seeding déjà fait
+                log_retrieval(
+                    cur, **common, generation_ms=None, prompt_tokens=None,
+                    completion_tokens=None, answer_length=None, is_declined=None,
+                    is_well_formatted=None, is_error=True, error_message=str(e)[:500],
+                )
                 print(f"[{mode:6s}] {q['question'][:50]:50s} -> ÉCHOUÉ ({e})")
                 continue
-            latency_ms = int((time.time() - start) * 1000)
-            rating = format_compliant_rating(answer)
+
+            rating = rating_from_answer(answer)
+            latency_ms = embedding_ms + search_ms + generation_ms
 
             log_feedback(cur, q["question"], answer, rating, mode, latency_ms)
+            log_retrieval(
+                cur, **common,
+                generation_ms=generation_ms,
+                prompt_tokens=usage.get("prompt_tokens"),
+                completion_tokens=usage.get("completion_tokens"),
+                answer_length=len(answer),
+                is_declined=is_declined_answer(answer),
+                is_well_formatted=is_well_formatted_answer(answer),
+                is_error=False,
+                error_message=None,
+            )
             total += 1
             print(f"[{mode:6s}] {q['question'][:50]:50s} -> {rating:+d} ({latency_ms}ms)")
 
@@ -139,7 +182,7 @@ def main():
 
     cur.close()
     conn.close()
-    print(f"\n{total} interactions enregistrées dans la table feedback.")
+    print(f"\n{total} interactions enregistrées dans feedback + retrieval_log.")
 
 
 if __name__ == "__main__":

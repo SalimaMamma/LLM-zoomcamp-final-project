@@ -1,11 +1,11 @@
 {
-  "title": "SciFit-Check — Vue d'ensemble",
+  "title": "SciFit-Check — Overview",
   "timezone": "browser",
   "time": {"from": "now-30d", "to": "now"},
   "panels": [
     {
       "id": 1,
-      "title": "Volume de questions par jour",
+      "title": "Questions per day",
       "type": "timeseries",
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
       "targets": [
@@ -17,7 +17,7 @@
     },
     {
       "id": 2,
-      "title": "Taux de satisfaction (%)",
+      "title": "Satisfaction rate (%)",
       "type": "stat",
       "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0},
       "targets": [
@@ -29,7 +29,7 @@
     },
     {
       "id": 3,
-      "title": "Latence moyenne (ms)",
+      "title": "Average latency (ms)",
       "type": "stat",
       "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0},
       "targets": [
@@ -41,7 +41,7 @@
     },
     {
       "id": 4,
-      "title": "Répartition des modes de retrieval utilisés",
+      "title": "Retrieval mode split",
       "type": "piechart",
       "gridPos": {"h": 8, "w": 8, "x": 0, "y": 8},
       "targets": [
@@ -59,19 +59,19 @@
     },
     {
       "id": 5,
-      "title": "Feedback positif vs négatif par mode",
+      "title": "Positive vs negative feedback by mode",
       "type": "barchart",
       "gridPos": {"h": 8, "w": 8, "x": 8, "y": 8},
       "targets": [
         {
-          "rawSql": "SELECT retrieval_mode, sum(CASE WHEN rating = 1 THEN 1 ELSE 0 END) AS positif, sum(CASE WHEN rating = -1 THEN 1 ELSE 0 END) AS negatif FROM feedback GROUP BY retrieval_mode",
+          "rawSql": "SELECT retrieval_mode, sum(CASE WHEN rating = 1 THEN 1 ELSE 0 END) AS positive, sum(CASE WHEN rating = -1 THEN 1 ELSE 0 END) AS negative FROM feedback GROUP BY retrieval_mode",
           "format": "table"
         }
       ]
     },
     {
       "id": 6,
-      "title": "Papiers indexés par niveau de preuve",
+      "title": "Indexed papers by evidence level",
       "type": "piechart",
       "gridPos": {"h": 8, "w": 8, "x": 16, "y": 8},
       "targets": [
@@ -86,6 +86,141 @@
         "displayLabels": ["name", "percent"],
         "legend": {"displayMode": "table", "placement": "right", "values": ["value"]}
       }
+    },
+    {
+      "id": 7,
+      "title": "Average latency by stage (ms)",
+      "type": "barchart",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 16},
+      "targets": [
+        {
+          "rawSql": "SELECT 'embedding' AS stage, avg(embedding_ms) AS avg_ms FROM retrieval_log WHERE is_error = false UNION ALL SELECT 'search', avg(search_ms) FROM retrieval_log WHERE is_error = false UNION ALL SELECT 'generation', avg(generation_ms) FROM retrieval_log WHERE is_error = false",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Error rate (%)",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 16},
+      "targets": [
+        {
+          "rawSql": "SELECT (sum(CASE WHEN is_error THEN 1 ELSE 0 END)::float / NULLIF(count(*),0) * 100) AS error_rate FROM retrieval_log",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Avg tokens per request (in/out)",
+      "type": "barchart",
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 16},
+      "targets": [
+        {
+          "rawSql": "SELECT 'prompt (in)' AS token_type, avg(prompt_tokens) AS avg_tokens FROM retrieval_log WHERE is_error = false UNION ALL SELECT 'completion (out)', avg(completion_tokens) FROM retrieval_log WHERE is_error = false",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Avg publication year of retrieved chunks",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 6, "x": 0, "y": 24},
+      "targets": [
+        {
+          "rawSql": "SELECT avg(p.year) AS avg_year FROM retrieval_log r, unnest(r.paper_ids) AS pid JOIN papers p ON p.paper_id = pid WHERE r.is_error = false",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "title": "Papers never retrieved (archival candidates)",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 6, "x": 6, "y": 24},
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) AS never_retrieved FROM papers p WHERE NOT EXISTS (SELECT 1 FROM retrieval_log r WHERE p.paper_id = ANY(r.paper_ids))",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "title": "\"No relevant source\" rate (%)",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 6, "x": 12, "y": 24},
+      "targets": [
+        {
+          "rawSql": "SELECT (sum(CASE WHEN is_declined THEN 1 ELSE 0 END)::float / NULLIF(sum(CASE WHEN is_declined IS NOT NULL THEN 1 ELSE 0 END),0) * 100) AS decline_rate FROM retrieval_log",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "title": "Well-formatted answer rate (%)",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 6, "x": 18, "y": 24},
+      "targets": [
+        {
+          "rawSql": "SELECT (sum(CASE WHEN is_well_formatted THEN 1 ELSE 0 END)::float / NULLIF(sum(CASE WHEN is_well_formatted IS NOT NULL THEN 1 ELSE 0 END),0) * 100) AS well_formatted_rate FROM retrieval_log",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "title": "Avg chunk similarity score by mode",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+      "targets": [
+        {
+          "rawSql": "SELECT date_trunc('day', created_at) AS time, retrieval_mode, avg(avg_chunk_score) AS avg_score FROM retrieval_log WHERE avg_chunk_score IS NOT NULL GROUP BY 1, 2 ORDER BY 1",
+          "format": "time_series"
+        }
+      ],
+      "description": "Not comparable across modes: vector = cosine similarity (0-1), bm25 = unbounded lexical score, hybrid = RRF score (~0.01-0.03 range). Watch each mode's own trend, not the absolute values between modes."
+    },
+    {
+      "id": 15,
+      "title": "Zero-result query rate (%)",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 6, "x": 12, "y": 32},
+      "targets": [
+        {
+          "rawSql": "SELECT (sum(CASE WHEN chunk_count = 0 THEN 1 ELSE 0 END)::float / NULLIF(count(*),0) * 100) AS zero_result_rate FROM retrieval_log",
+          "format": "table"
+        }
+      ],
+      "description": "\"No relevant chunk\" defined as zero results returned, not a similarity threshold: vector/bm25/hybrid scores aren't on a comparable 0-1 scale, so one fixed threshold across modes would be meaningless."
+    },
+    {
+      "id": 16,
+      "title": "Distinct papers retrieved (30d)",
+      "type": "stat",
+      "gridPos": {"h": 8, "w": 6, "x": 18, "y": 32},
+      "targets": [
+        {
+          "rawSql": "SELECT count(DISTINCT pid) AS distinct_papers FROM retrieval_log r, unnest(r.paper_ids) AS pid WHERE r.created_at > now() - interval '30 days'",
+          "format": "table"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "title": "Top 10 most-retrieved papers",
+      "type": "table",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 40},
+      "targets": [
+        {
+          "rawSql": "SELECT p.title, count(*) AS times_retrieved FROM retrieval_log r, unnest(r.paper_ids) AS pid JOIN papers p ON p.paper_id = pid GROUP BY p.title ORDER BY times_retrieved DESC LIMIT 10",
+          "format": "table"
+        }
+      ],
+      "description": "If the same handful of papers always come back, that's a signal to check indexing coverage or query bias — not necessarily a problem on a small corpus."
     }
   ],
   "schemaVersion": 39,

@@ -21,18 +21,18 @@ from tqdm import tqdm
 
 load_dotenv()
 
-EXTRACTION_PROMPT = """Tu es un assistant d'extraction d'information scientifique.
-À partir de l'abstract suivant, extrais entre 1 et 5 triplets
-(sujet, relation, objet) qui capturent les affirmations factuelles
-principales (interventions, effets, contradictions avec d'autres travaux).
+EXTRACTION_PROMPT = """You are a scientific information extraction assistant.
+From the following abstract, extract between 1 and 5 triplets
+(subject, relation, object) capturing the main factual claims
+(interventions, effects, contradictions with other work).
 
-Relations autorisées : improves, reduces, no_effect_on, increases,
+Allowed relations: improves, reduces, no_effect_on, increases,
 decreases, contradicts, confirms, associated_with.
 
-Réponds UNIQUEMENT avec un JSON de la forme :
+Reply ONLY with JSON of the form:
 {{"triplets": [{{"subject": "...", "relation": "...", "object": "..."}}]}}
 
-Abstract :
+Abstract:
 \"\"\"{abstract}\"\"\"
 """
 

@@ -5,6 +5,7 @@ pour combiner deux classements sans avoir à calibrer des poids.
 """
 import os
 import pickle
+import time
 
 from qdrant_client import QdrantClient
 from sentence_transformers import SentenceTransformer
@@ -29,9 +30,17 @@ class HybridRetriever:
             bm25_data = pickle.load(f)
         self.bm25 = bm25_data["bm25"]
         self.bm25_chunks = bm25_data["chunks"]
+        # Timing du dernier appel à search() : {"embedding_ms": int, "search_ms": int}.
+        # Alimente le panel de latence par étape dans Grafana (voir
+        # streamlit_app/app.py et docs/monitoring.md) sans changer la
+        # signature de search(), pour ne rien casser chez les appelants
+        # existants (eval scripts).
+        self.last_timing = {"embedding_ms": 0, "search_ms": 0}
 
     def _vector_search(self, query: str, top_k: int) -> list[dict]:
+        t0 = time.time()
         vec = self.model.encode([query])[0].tolist()
+        self.last_timing["embedding_ms"] += int((time.time() - t0) * 1000)
         hits = self.qdrant.search(
             collection_name=QDRANT_COLLECTION, query_vector=vec, limit=top_k
         )
@@ -48,10 +57,19 @@ class HybridRetriever:
         mode: "vector" | "bm25" | "hybrid"
         Retourne une liste de chunks triés par pertinence, dédupliqués par chunk_id.
         """
+        self.last_timing = {"embedding_ms": 0, "search_ms": 0}
+        t_start = time.time()
+
         if mode == "vector":
-            return self._vector_search(query, top_k)
+            results = self._vector_search(query, top_k)
+            elapsed_ms = int((time.time() - t_start) * 1000)
+            self.last_timing["search_ms"] = max(0, elapsed_ms - self.last_timing["embedding_ms"])
+            return results
+
         if mode == "bm25":
-            return self._bm25_search(query, top_k)
+            results = self._bm25_search(query, top_k)
+            self.last_timing["search_ms"] = int((time.time() - t_start) * 1000)
+            return results
 
         # hybride : RRF sur les deux classements
         vector_results = self._vector_search(query, top_k * 2)
@@ -71,4 +89,6 @@ class HybridRetriever:
             chunk_lookup.setdefault(cid, chunk)
 
         ranked_ids = sorted(rrf_scores, key=lambda cid: rrf_scores[cid], reverse=True)[:top_k]
+        elapsed_ms = int((time.time() - t_start) * 1000)
+        self.last_timing["search_ms"] = max(0, elapsed_ms - self.last_timing["embedding_ms"])
         return [chunk_lookup[cid] | {"score": rrf_scores[cid]} for cid in ranked_ids]

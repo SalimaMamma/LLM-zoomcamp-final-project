@@ -6,7 +6,7 @@ answers questions about sports nutrition and athletic performance using
 Europe PMC, and OpenAlex), with verifiable citations and an explicit
 evidence-strength rating on every answer.
 
-![App home screen](docs/images/01_accueil.png)
+![App home screen](docs/images/01_home.png)
 
 > Built as a course project (DataTalksClub-style LLM/RAG project). This
 > README assumes no prior context — everything needed to understand,
@@ -154,7 +154,7 @@ with it.
 
 1. Pick a retrieval mode (`hybrid` is the default) and ask a question:
 
-   ![Question typed in](docs/images/02_question_remplie.png)
+   ![Question typed in](docs/images/02_question_typed.png)
 
 2. The hybrid retriever searches across the indexed chunks. Real example
    (mode `hybrid`, question *"does fasted cardio increase fat oxidation"*):
@@ -172,15 +172,15 @@ with it.
 3. These excerpts (with study type and year) are injected into the answer
    prompt ([`src/llm/answer.py`](src/llm/answer.py)), which forces the LLM
    to cite `[source: n]` for every claim and end with a line
-   `Niveau de preuve global: <low|medium|high>` (evidence level).
+   `Overall evidence level: <low|medium|high>`.
 4. The answer is shown with an expander listing the sources used, and two
    buttons 👍/👎 to leave feedback (see [Monitoring](#monitoring)):
 
-   ![Full answer with sources](docs/images/02b_reponse_complete.png)
+   ![Full answer with sources](docs/images/02b_full_answer.png)
 
-The UI itself is in French (`streamlit_app/app.py`) — the target users
-are French-speaking, this README/docs are in English for reviewers. The
-corpus and generated answers are in English (source abstracts are English).
+Interface, prompts, and generated answers are all in English — the app
+accepts questions in any language Groq's model understands (French
+included), but always answers in English.
 
 ## Ingestion
 
@@ -234,10 +234,13 @@ Full methodology, per-question scores, and exact reproduce command in
 
 ## Monitoring
 
-👍/👎 feedback is collected on every answer (Postgres table `feedback`:
-question, answer, rating, retrieval mode, latency) **and** a Grafana
-dashboard is auto-provisioned with **6 charts** — details and screenshot
-in **[docs/monitoring.md](docs/monitoring.md)**.
+👍/👎 feedback is collected on every answer, **and every single request**
+(rated or not) is logged with full instrumentation — latency broken down
+by stage (embedding/search/generation), token cost, retrieval score
+quality, source diversity, corpus freshness, and error rate. A Grafana
+dashboard is auto-provisioned with **17 charts** across usage, cost,
+generation quality, and retrieval quality — details and screenshot in
+**[docs/monitoring.md](docs/monitoring.md)**.
 
 ![Grafana dashboard](docs/images/03_grafana_dashboard.png)
 
@@ -251,11 +254,21 @@ Honest gaps, rather than glossing over them:
   cross-encoder (e.g. `ms-marco-MiniLM`) over the top-20 hybrid results
   before the 6 chunks sent to the LLM.
 - ❌ **Query rewriting** — not implemented. Would add: a light LLM call to
-  translate/reformulate the French user question into English retrieval
-  terminology before search (the current mismatch between French questions
-  and an English corpus is visible in BM25's lower score — see
-  [docs/evaluation.md](docs/evaluation.md)).
+  reformulate the user's question into English retrieval terminology
+  before search (the corpus and prompts are English; a question asked in
+  another language is more likely to hurt BM25's exact-match scoring than
+  the embedding-based modes — see [docs/evaluation.md](docs/evaluation.md)).
 - ❌ **Cloud deployment** — not done, runs locally via `docker compose`.
+- ❌ **Query-vocabulary drift detection** (do incoming questions gradually
+  shift toward topics/terms the corpus doesn't cover?) — deliberately not
+  built. A real version needs embedding-based clustering over time; a
+  correct-but-shallow proxy would need calibration against real traffic
+  this project doesn't have yet. Rather than ship a metric that looks
+  scientific but isn't, it's left as a documented gap.
+- ❌ **Embedding-model drift** — not tracked, because `EMBEDDING_MODEL`
+  has never changed and nothing versions it; a metric that would always
+  read "no drift" is not a metric worth building. Relevant if the
+  embedding model is ever swapped — see [docs/monitoring.md](docs/monitoring.md).
 - The corpus covers abstracts only (no full text).
 - **82% of indexed papers are classified `study_type: unknown`** (visible
   on the Grafana dashboard) — `pubType`-based classification works well
