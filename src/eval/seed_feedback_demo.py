@@ -50,12 +50,34 @@ def get_connection():
     )
 
 
+NO_EVIDENCE_MARKERS = (
+    "ne contiennent aucune information",
+    "ne permettent pas de répondre",
+    "ne traite du",
+    "ne traitent du",
+    "aucun des extraits",
+    "aucune donnée",
+)
+
+
 def format_compliant_rating(answer: str) -> int:
     """Vérification automatique et déterministe (pas un jugement humain) :
-    la réponse cite au moins une source et affiche le niveau de preuve
-    demandé dans le prompt -> 1, sinon -> -1."""
-    has_citation = bool(re.search(r"\[source\s*:\s*\d+\]", answer, re.IGNORECASE))
-    has_evidence_line = "niveau de preuve" in answer.lower()
+
+    - la réponse cite au moins une source (le prompt demande "[source: n]",
+      mais le modèle utilise parfois juste "[n]" -> les deux comptent) ET
+      affiche la ligne de niveau de preuve -> positif ;
+    - la réponse décline explicitement faute de source pertinente (comportement
+      voulu par le prompt : "dis-le explicitement plutôt que d'inventer") ->
+      positif aussi, ce n'est pas un échec de format, c'est le comportement
+      demandé ;
+    - sinon -> négatif (réponse qui n'affiche ni citation, ni aveu d'absence
+      de source, ni niveau de preuve -> signal de mauvais format).
+    """
+    lowered = answer.lower()
+    if any(marker in lowered for marker in NO_EVIDENCE_MARKERS):
+        return 1
+    has_citation = bool(re.search(r"\[(?:source\s*:\s*)?\d+\]", answer, re.IGNORECASE))
+    has_evidence_line = "niveau de preuve" in lowered
     return 1 if (has_citation and has_evidence_line) else -1
 
 
@@ -96,13 +118,24 @@ def main():
             if not chunks:
                 continue
 
-            answer = generate_answer(q["question"], chunks)
+            try:
+                answer = generate_answer(q["question"], chunks)
+            except Exception as e:
+                # rate limit (TPM/TPD) ou autre erreur Groq -> on saute cette
+                # interaction plutôt que de perdre tout le seeding déjà fait
+                print(f"[{mode:6s}] {q['question'][:50]:50s} -> ÉCHOUÉ ({e})")
+                continue
             latency_ms = int((time.time() - start) * 1000)
             rating = format_compliant_rating(answer)
 
             log_feedback(cur, q["question"], answer, rating, mode, latency_ms)
             total += 1
             print(f"[{mode:6s}] {q['question'][:50]:50s} -> {rating:+d} ({latency_ms}ms)")
+
+            # Le tier gratuit Groq limite aussi les tokens/minute (pas
+            # seulement /jour) -> on laisse respirer entre deux appels pour
+            # ne pas se faire jeter en plein milieu du seeding.
+            time.sleep(8)
 
     cur.close()
     conn.close()

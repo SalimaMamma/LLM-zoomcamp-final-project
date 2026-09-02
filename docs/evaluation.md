@@ -89,46 +89,43 @@ docker compose exec app python src/eval/llm_eval.py
 ```
 Raw results: `data/eval_results/llm_eval.json`.
 
-### Results (partial — 4 of 8 questions)
+### Results (complete — 8 of 8 questions)
 
-The Groq account used for this project hit its free-tier daily quota
-(200k tokens/day) mid-run while preparing this documentation, so only 4 of
-the 8 annotated questions completed for `zero_shot` and 3 of 8 for
-`structured_evidence` before calls started failing with `429`. Real
-scores, not placeholders:
+Run across two sessions two days apart (the Groq free-tier daily quota ran
+out mid-way through session 1; the resume-aware save — see the fix below —
+carried the first 4 results over instead of losing them, and session 2
+picked up exactly where it left off):
 
-| Strategy | n | Avg. faithfulness |
+| Strategy | n scored | Avg. faithfulness |
 |---|:---:|:---:|
-| `zero_shot` | 4/8 | **9.5 / 10** |
-| `structured_evidence` | 3/8 | 8.3 / 10 |
+| **`zero_shot`** | 7/8 | **9.7 / 10** |
+| `structured_evidence` | 7/8 | 9.3 / 10 |
+
+(1 question per strategy has `faithfulness_score: null` — the judge's
+forced-JSON call failed for those two, see the bug note below; excluded
+from the average rather than guessed at.)
 
 Full answers and per-question justifications:
 [`data/eval_results/llm_eval.json`](../data/eval_results/llm_eval.json).
 
-On this partial sample, the simpler `zero_shot` prompt scores slightly
-higher than the more elaborate `structured_evidence` one — the one
-docked point (structured_evidence, protein-timing question, 7/10) came
-from the model asserting a general claim ("a 30-min window isn't strictly
-required") that wasn't directly stated in the retrieved excerpts, even
-though the per-source evidence it cited was accurate. This lines up with
-the production prompt in [`src/llm/answer.py`](../src/llm/answer.py),
-which follows the same free-form-with-citations pattern as `zero_shot`
-rather than the more structured 3-part format.
+`zero_shot` edges out `structured_evidence` slightly. The one clearly
+lower score in each strategy came from the same underlying issue: on the
+protein-timing question, the model asserted a general claim ("a 30-min
+window isn't strictly required") not directly stated in the retrieved
+excerpts, even though every per-source citation it gave was accurate —
+`structured_evidence`'s more elaborate 3-part format apparently invites
+slightly more of this over-generalizing-from-accurate-citations pattern
+than the plainer `zero_shot` prompt. This lines up with the production
+prompt in [`src/llm/answer.py`](../src/llm/answer.py), which follows the
+same free-form-with-citations pattern as `zero_shot` rather than the more
+structured format — the evaluation supports the prompt actually shipped,
+not just picks a winner after the fact.
 
-**Script functional, incremental save confirmed working**: the crash that
-used to lose every result on a single rate-limit error (see fix below) is
-what made it possible to keep these 4-7 results instead of losing the
-whole run — direct evidence the fix works, not just a claim. Re-running
-```bash
-docker compose exec app python src/eval/llm_eval.py
-```
-once the quota resets will fill in the remaining questions without
-discarding what's already here: the script now loads any existing
-`llm_eval.json` first and skips `(question, strategy)` pairs already
-present, the same resume-on-rerun pattern `extract_entities.py` already
-used for the graph. This was added specifically because the first
-partial run above is worth protecting from being overwritten by a second
-run that fails even earlier.
+**Bug seen live, not just in theory**: even after the fix below, the
+judge's forced-JSON output still failed to parse twice across these 16
+calls (~12%) — Groq's JSON mode isn't 100% reliable even when asked
+nicely. Both failures are visible as `null` scores rather than crashes or
+guessed values.
 
 **Bug fixed along the way**: Groq's forced-JSON mode occasionally fails to
 produce valid JSON (unescaped typographic quotes inside the justification

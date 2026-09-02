@@ -220,16 +220,14 @@ rank-for-rank to the other three — see the full discussion in
 [docs/evaluation.md](docs/evaluation.md#why-hybrid-is-the-apps-default-mode-despite-these-numbers).*
 
 **LLM generation** — 2 prompting strategies compared via an LLM-judge
-(faithfulness score 0-10), on a Groq-quota-limited partial sample:
+(faithfulness score 0-10), full 8-question run:
 
-| Strategy | n | Avg. faithfulness |
+| Strategy | n scored | Avg. faithfulness |
 |---|:---:|:---:|
-| `zero_shot` *(matches the production prompt)* | 4/8 | **9.5 / 10** |
-| `structured_evidence` | 3/8 | 8.3 / 10 |
+| **`zero_shot`** *(matches the production prompt)* | 7/8 | **9.7 / 10** |
+| `structured_evidence` | 7/8 | 9.3 / 10 |
 
-Remaining questions pending a quota reset — the script now resumes instead
-of overwriting on re-run. Full methodology, per-question scores, and exact
-reproduce command in
+Full methodology, per-question scores, and exact reproduce command in
 [docs/evaluation.md](docs/evaluation.md#2-llm-generation-evaluation-llm-as-judge).
 
 ## Monitoring
