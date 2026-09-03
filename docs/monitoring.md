@@ -50,16 +50,24 @@ which feeds a large share of the corpus.
 
 | Panel | Type | Shows |
 |---|---|---|
-| Average latency by stage (ms) | barchart | embedding / search / generation, averaged separately |
+| Average latency by stage (ms) | barchart | embedding / search / rerank / generation, averaged separately (rerank only counted over requests that had it on) |
 | Error rate (%) | stat | % of requests where the pipeline raised an exception |
 | Avg tokens per request (in/out) | barchart | Groq `prompt_tokens` / `completion_tokens`, direct proxy for $ cost per request |
 
-**Real finding, not a hypothesis**: generation (~7.4s) dominates
-end-to-end latency by roughly two orders of magnitude over embedding
-(~50ms) and search (~25ms) combined — visible directly on the chart, where
-the embedding/search bars are barely tall enough to show a value. If
-latency ever needs optimizing, the LLM call is where the budget is, not
-the retrieval side.
+**Real finding, not a hypothesis**: generation dominates end-to-end
+latency over embedding+search combined by roughly an order of magnitude
+(embedding ~50ms, search ~250ms, generation ~1.3s in the current sample —
+the exact numbers move around with Groq load, but the gap is consistent).
+If latency ever needs optimizing, the LLM call is where the budget is,
+not the retrieval side.
+
+**Re-ranking's real cost, measured, not just estimated**: when enabled,
+the cross-encoder pass (~1.3s) roughly **doubles** total latency — it's
+in the same ballpark as generation itself, not a cheap add-on. Combined
+with the recall@8 regression on `hybrid` documented in
+[docs/evaluation.md](evaluation.md#re-ranking-measured-not-assumed), this
+is the second, independent reason (latency, not just accuracy) the UI
+checkbox defaults to off.
 
 ### Row 4 — generation quality & corpus freshness
 
@@ -70,13 +78,13 @@ the retrieval side.
 | "No relevant source" rate (%) | stat | How often the model correctly declines instead of hallucinating |
 | Well-formatted answer rate (%) | stat | % with both a citation and an evidence-level line |
 
-On the current (small, synthetic 32-request) seed: avg year **2016**,
-**307/561 papers never retrieved**, decline rate **21.9%**, well-formatted
-rate **53.1%**. That well-formatted number is a genuine, slightly
+On the current (small, synthetic ~32-request) seed: avg year **2016**,
+**450/561 papers never retrieved**, decline rate **19.4%**, well-formatted
+rate **61.3%**. That well-formatted number is a genuine, slightly
 uncomfortable finding: even with an explicit prompt instruction, the model
-skips the citation or the evidence-level line in roughly half of answers
-in this sample — worth watching as real usage accumulates, not just
-assumed to be near-100% because the prompt asks for it.
+skips the citation or the evidence-level line in a meaningful chunk of
+answers — worth watching as real usage accumulates, not just assumed to
+be near-100% because the prompt asks for it.
 
 ### Row 5 — retrieval quality
 
@@ -141,9 +149,17 @@ Two ways:
    formatting failure — both checks now live once in
    `src/llm/answer.py`, shared by the app and the seed script instead of
    duplicated.
+4. **A Qdrant `ReadTimeout` crashed the entire seed run**, losing every
+   result already collected, because only the LLM generation call was
+   wrapped in `try/except` — the retrieval step (Qdrant/BM25/reranker)
+   wasn't. This is now the **3.13% error rate** visible on the dashboard
+   in the screenshot above: a real, reproduced timeout, caught and logged
+   instead of crashing the second time it happened. Fixed by wrapping the
+   retrieval step too, in both `streamlit_app/app.py` and
+   `seed_feedback_demo.py`.
 
-None of these three were visible from reading the code or the JSON —
-all three only surfaced once real data existed and the dashboard was
+None of these four were visible from reading the code or the JSON — all
+four only surfaced once real data existed and the dashboard was
 actually opened in a browser.
 
 ## What's missing to go further
