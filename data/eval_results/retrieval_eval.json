@@ -5,9 +5,19 @@
     "mrr": 0.9375
   },
   {
+    "mode": "vector+rerank",
+    "recall@8": 1.0,
+    "mrr": 0.90625
+  },
+  {
     "mode": "bm25",
     "recall@8": 0.875,
     "mrr": 0.625
+  },
+  {
+    "mode": "bm25+rerank",
+    "recall@8": 0.875,
+    "mrr": 0.875
   },
   {
     "mode": "hybrid",
@@ -15,7 +25,17 @@
     "mrr": 0.9166666666666666
   },
   {
+    "mode": "hybrid+rerank",
+    "recall@8": 0.875,
+    "mrr": 0.875
+  },
+  {
     "mode": "graph",
+    "recall@8": 1.0,
+    "mrr": 1.0
+  },
+  {
+    "mode": "graph+rerank",
     "recall@8": 1.0,
     "mrr": 1.0
   }

@@ -68,6 +68,46 @@ MRR than `hybrid`. Two reasons not to read this as "turn hybrid off":
    vector search is strong) — a robustness choice, not just raw score on
    this sample.
 
+### Re-ranking: measured, not assumed
+
+A cross-encoder re-ranking pass (`cross-encoder/ms-marco-MiniLM-L-6-v2`,
+see [`src/retrieval/hybrid.py`](../src/retrieval/hybrid.py)) is available
+in every mode: fetch `top_k × 3` candidates, score each `(query, chunk)`
+pair with the cross-encoder, keep the top `k`. It's implemented and
+**evaluated**, exactly like hybrid search itself, rather than assumed to
+help just because it's a known technique:
+
+| Mode | Recall@8 (off → on) | MRR (off → on) |
+|---|:---:|:---:|
+| vector | 1.00 → 1.00 | 0.938 → 0.906 |
+| bm25 | 0.875 → 0.875 | **0.625 → 0.875** |
+| **hybrid** *(app default)* | **1.00 → 0.875** | 0.917 → 0.875 |
+| graph | 1.00 → 1.00 | 1.00 → 1.00 |
+
+**Re-ranking is a clear win for `bm25`** (MRR +0.25) — makes sense: raw
+BM25 ranking is purely lexical and the cross-encoder adds real semantic
+judgment on top. **It measurably hurts `hybrid`**, the app's default mode:
+recall@8 drops from 1.00 to 0.875, meaning on this 8-question set, at
+least one previously-correct answer got pushed out of the top 8 by the
+re-ranking pass. RRF-fused rankings are already a decent blend of
+lexical + semantic signal; re-ranking on top of that can apparently
+overrule a correct RRF ranking with a cross-encoder judgment that,
+on a small sample, is sometimes wrong.
+
+**Decision made from this data, not despite it**: the app's re-ranking
+checkbox defaults to **off**. It's still available as a toggle (and used
+in the monitoring demo seed, to keep the `rerank_ms`/`reranked` telemetry
+populated) but the measured evidence for the default mode doesn't support
+turning it on by default. As with the hybrid-vs-vector comparison above,
+8 questions is a small sample — this conclusion could change with a
+larger annotated set, and re-running
+`docker compose exec app python src/eval/retrieval_eval.py` is one
+command away if the corpus or question set grows.
+
+Reproduce with the same command as the retrieval evaluation above; the
+8 `+rerank` rows are included automatically in
+[`data/eval_results/retrieval_eval.json`](../data/eval_results/retrieval_eval.json).
+
 ## 2. LLM generation evaluation (LLM-as-judge)
 
 **Script:** [`src/eval/llm_eval.py`](../src/eval/llm_eval.py)

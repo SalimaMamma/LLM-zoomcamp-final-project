@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS retrieval_log (
     retrieval_mode     TEXT,              -- hybrid / vector / bm25 / graph
     embedding_ms       INTEGER,           -- temps d'encodage de la requête (0 si non applicable au mode)
     search_ms          INTEGER,           -- temps de recherche (Qdrant+BM25+RRF, ou traversée du graphe)
+    rerank_ms          INTEGER,           -- temps du cross-encoder (0/NULL si reranking désactivé)
+    reranked           BOOLEAN DEFAULT false, -- reranking activé pour cette requête ?
     generation_ms       INTEGER,           -- temps d'appel Groq pour générer la réponse
     prompt_tokens      INTEGER,           -- tokens en entrée du prompt de génération
     completion_tokens  INTEGER,           -- tokens en sortie

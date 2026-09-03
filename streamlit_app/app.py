@@ -21,7 +21,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src", "retrieval"
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src", "graphrag"))
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src", "llm"))
 
-from hybrid import HybridRetriever  # noqa: E402
+from hybrid import HybridRetriever, rerank_chunks  # noqa: E402
 from graph_store import KnowledgeGraph  # noqa: E402
 from answer import (  # noqa: E402
     generate_answer_with_usage,
@@ -82,12 +82,12 @@ def log_retrieval(**kw):
         cur.execute(
             """
             INSERT INTO retrieval_log (
-                question, retrieval_mode, embedding_ms, search_ms, generation_ms,
+                question, retrieval_mode, embedding_ms, search_ms, rerank_ms, reranked, generation_ms,
                 prompt_tokens, completion_tokens, avg_chunk_score, min_chunk_score,
                 chunk_count, paper_ids, answer_length, is_declined, is_well_formatted,
                 is_error, error_message
             ) VALUES (
-                %(question)s, %(retrieval_mode)s, %(embedding_ms)s, %(search_ms)s, %(generation_ms)s,
+                %(question)s, %(retrieval_mode)s, %(embedding_ms)s, %(search_ms)s, %(rerank_ms)s, %(reranked)s, %(generation_ms)s,
                 %(prompt_tokens)s, %(completion_tokens)s, %(avg_chunk_score)s, %(min_chunk_score)s,
                 %(chunk_count)s, %(paper_ids)s, %(answer_length)s, %(is_declined)s, %(is_well_formatted)s,
                 %(is_error)s, %(error_message)s
@@ -114,6 +114,18 @@ mode = st.radio(
     help="hybrid = vector + BM25 (RRF) — graph = knowledge graph traversal",
 )
 
+rerank = st.checkbox(
+    "🎯 Re-rank with cross-encoder",
+    value=False,
+    help=(
+        "Second pass with a cross-encoder (ms-marco-MiniLM) over a larger "
+        "candidate pool before picking the final sources. Off by default: "
+        "measured evaluation shows it helps bm25 a lot (MRR 0.62→0.88) but "
+        "hurts hybrid, the default mode (recall@8 1.00→0.88) — see "
+        "docs/evaluation.md for the full comparison across modes."
+    ),
+)
+
 question = st.text_input(
     "Ask your question",
     placeholder="E.g.: Does intermittent fasting improve endurance performance?",
@@ -122,26 +134,42 @@ question = st.text_input(
 if st.button("Check", type="primary") and question:
     start = time.time()
     with st.spinner("Searching the scientific literature..."):
-        embedding_ms, search_ms = 0, 0
-        if mode == "graph":
-            kg = load_graph()
-            t0 = time.time()
-            relations = kg.get_relations_for_entity(question)
-            search_ms = int((time.time() - t0) * 1000)
-            chunks = [
-                {
-                    "content": f"{r['subject']} {r['relation']} {r['object']}",
-                    "study_type": "graph_relation",
-                    "year": "-",
-                    "paper_id": r.get("paper_id"),
-                }
-                for r in relations
-            ]
-        else:
-            retriever = load_retriever()
-            chunks = retriever.search(question, top_k=6, mode=mode)
-            embedding_ms = retriever.last_timing["embedding_ms"]
-            search_ms = retriever.last_timing["search_ms"]
+        embedding_ms, search_ms, rerank_ms = 0, 0, 0
+        try:
+            if mode == "graph":
+                kg = load_graph()
+                t0 = time.time()
+                relations = kg.get_relations_for_entity(question)
+                search_ms = int((time.time() - t0) * 1000)
+                chunks = [
+                    {
+                        "content": f"{r['subject']} {r['relation']} {r['object']}",
+                        "study_type": "graph_relation",
+                        "year": "-",
+                        "paper_id": r.get("paper_id"),
+                    }
+                    for r in relations
+                ]
+                if rerank:
+                    chunks, rerank_ms = rerank_chunks(question, chunks, top_k=6)
+            else:
+                retriever = load_retriever()
+                chunks = retriever.search(question, top_k=6, mode=mode, rerank=rerank)
+                embedding_ms = retriever.last_timing["embedding_ms"]
+                search_ms = retriever.last_timing["search_ms"]
+                rerank_ms = retriever.last_timing["rerank_ms"]
+        except Exception as e:
+            # Qdrant/BM25/reranker peuvent aussi échouer (timeout réseau
+            # transitoire vu en pratique) -- pas seulement Groq côté génération.
+            st.error(f"Search failed: {e}")
+            log_retrieval(
+                question=question, retrieval_mode=mode, embedding_ms=None, search_ms=None,
+                rerank_ms=None, reranked=rerank, generation_ms=None, prompt_tokens=None,
+                completion_tokens=None, avg_chunk_score=None, min_chunk_score=None,
+                chunk_count=None, paper_ids=None, answer_length=None, is_declined=None,
+                is_well_formatted=None, is_error=True, error_message=str(e)[:500],
+            )
+            st.stop()
 
         scores = [c["score"] for c in chunks if "score" in c]
         paper_ids = list({c["paper_id"] for c in chunks if c.get("paper_id")})
@@ -150,6 +178,8 @@ if st.button("Check", type="primary") and question:
             retrieval_mode=mode,
             embedding_ms=embedding_ms,
             search_ms=search_ms,
+            rerank_ms=rerank_ms,
+            reranked=rerank,
             avg_chunk_score=sum(scores) / len(scores) if scores else None,
             min_chunk_score=min(scores) if scores else None,
             chunk_count=len(chunks),

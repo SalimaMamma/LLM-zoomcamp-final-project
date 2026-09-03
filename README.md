@@ -221,6 +221,11 @@ detailed in **[docs/evaluation.md](docs/evaluation.md)**.
 rank-for-rank to the other three — see the full discussion in
 [docs/evaluation.md](docs/evaluation.md#why-hybrid-is-the-apps-default-mode-despite-these-numbers).*
 
+Each of these 4 modes was also re-evaluated **with cross-encoder
+re-ranking** on top — see
+[Best practices](#known-limitations--self-assessment) below for the
+(mixed, mode-dependent) result.
+
 **LLM generation** — 2 prompting strategies compared via an LLM-judge
 (faithfulness score 0-10), full 8-question run:
 
@@ -250,9 +255,13 @@ Honest gaps, rather than glossing over them:
 
 - ✅ **Hybrid search** (vector + BM25 with RRF), evaluated against each
   method alone — see [Evaluation](#evaluation).
-- ❌ **Document re-ranking** — not implemented. Would add: a lightweight
-  cross-encoder (e.g. `ms-marco-MiniLM`) over the top-20 hybrid results
-  before the 6 chunks sent to the LLM.
+- ✅ **Document re-ranking** — implemented (`cross-encoder/ms-marco-MiniLM-L-6-v2`
+  over `top_k×3` candidates, toggle in the UI) and evaluated across all 4
+  retrieval modes. **Off by default**, on purpose: it clearly helps `bm25`
+  (MRR 0.62→0.88) but measurably hurts `hybrid`, the default mode
+  (recall@8 1.00→0.875) — the decision follows the measurement rather
+  than assuming re-ranking is free upside. Full comparison in
+  [docs/evaluation.md](docs/evaluation.md#re-ranking-measured-not-assumed).
 - ❌ **Query rewriting** — not implemented. Would add: a light LLM call to
   reformulate the user's question into English retrieval terminology
   before search (the corpus and prompts are English; a question asked in

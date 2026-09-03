@@ -94,7 +94,7 @@
       "gridPos": {"h": 8, "w": 8, "x": 0, "y": 16},
       "targets": [
         {
-          "rawSql": "SELECT 'embedding' AS stage, avg(embedding_ms) AS avg_ms FROM retrieval_log WHERE is_error = false UNION ALL SELECT 'search', avg(search_ms) FROM retrieval_log WHERE is_error = false UNION ALL SELECT 'generation', avg(generation_ms) FROM retrieval_log WHERE is_error = false",
+          "rawSql": "SELECT 'embedding' AS stage, avg(embedding_ms) AS avg_ms FROM retrieval_log WHERE is_error = false UNION ALL SELECT 'search', avg(search_ms) FROM retrieval_log WHERE is_error = false UNION ALL SELECT 'rerank', avg(rerank_ms) FROM retrieval_log WHERE is_error = false AND reranked = true UNION ALL SELECT 'generation', avg(generation_ms) FROM retrieval_log WHERE is_error = false",
           "format": "table"
         }
       ]
