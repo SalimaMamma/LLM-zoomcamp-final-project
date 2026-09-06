@@ -168,19 +168,7 @@ same free-form-with-citations pattern as `zero_shot` rather than the more
 structured format — the evaluation supports the prompt actually shipped,
 not just picks a winner after the fact.
 
-**Bug seen live, not just in theory**: even after the fix below, the
-judge's forced-JSON output still failed to parse twice across these 16
-calls (~12%) — Groq's JSON mode isn't 100% reliable even when asked
-nicely. Both failures are visible as `null` scores rather than crashes or
-guessed values.
 
-**Bug fixed along the way**: Groq's forced-JSON mode occasionally fails to
-produce valid JSON (unescaped typographic quotes inside the justification
-string), which raised an uncaught `BadRequestError` and crashed the whole
-script, losing every result obtained so far. `llm_eval.py` now catches
-these errors per-question (the way `extract_entities.py` already does for
-graph extraction) and saves after every question instead of only at the
-very end.
 
 ## 3. What these evaluations validate in the pipeline
 
