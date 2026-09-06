@@ -8,8 +8,7 @@ evidence-strength rating on every answer.
 
 ![App home screen](docs/images/01_home.png)
 
-> Built as a course project (DataTalksClub-style LLM/RAG project). This
-> README assumes no prior context — everything needed to understand,
+> Built as a course project (DataTalksClub-style LLM/RAG project).
 > run, and evaluate the project is below or linked from here.
 
 ## The problem
@@ -30,28 +29,7 @@ number and type of concordant studies — meta-analysis > randomized trial >
 observational) — instead of asserting an answer with no grounding, the way
 a bare LLM would.
 
-## For reviewers — evaluation criteria & how to check them
-
-This project targets the following rubric. Each row links to where to
-verify it, and (where relevant) the exact command to reproduce it.
-
-| Criterion | Target | Where to check |
-|---|:---:|---|
-| Problem description | 2/2 | Section above |
-| Retrieval flow (knowledge base + LLM) | 2/2 | [Architecture](#architecture), [How it works](#how-it-works--worked-example) |
-| Retrieval evaluation (multiple approaches, best one used) | 2/2 | [Evaluation](#evaluation), full detail + raw results in [docs/evaluation.md](docs/evaluation.md) |
-| LLM evaluation (multiple approaches, best one used) | 2/2 | [Evaluation](#evaluation), full detail in [docs/evaluation.md](docs/evaluation.md) |
-| Interface | 2/2 | Streamlit UI, screenshots above/below |
-| Ingestion pipeline | 1/2 (semi-automated scripts, not an orchestrator) | [Ingestion](#ingestion) |
-| Monitoring (feedback collected + dashboard, 5+ charts) | 2/2 | [Monitoring](#monitoring), full detail in [docs/monitoring.md](docs/monitoring.md) |
-| Containerization (everything in docker-compose) | 2/2 | `docker-compose.yml` — Postgres, Qdrant, Grafana, app |
-| Reproducibility (clear instructions, data accessible, versions pinned) | 2/2 | [Quick start for reviewers](#quick-start-for-reviewers) below, full detail in [docs/setup.md](docs/setup.md) |
-| Best practices: hybrid search (evaluated) | 1pt | [Evaluation](#evaluation) — vector vs BM25 vs hybrid vs graph compared |
-| Best practices: re-ranking | not implemented | See [Limitations](#known-limitations--self-assessment) |
-| Best practices: query rewriting | not implemented | See [Limitations](#known-limitations--self-assessment) |
-| Bonus: cloud deployment | not implemented | Runs locally via `docker compose` |
-
-## Quick start for reviewers
+## Quick start 
 
 ```bash
 git clone <this-repo-url>
@@ -132,9 +110,6 @@ Full setup details, every environment variable, and troubleshooting
 
 ## Tech stack
 
-None of this is limited to what a specific course covers — below is what's
-used and why, with a short explanation of each tool for anyone unfamiliar
-with it.
 
 | Component | Choice | What it is / why |
 |---|---|---|
@@ -182,25 +157,6 @@ Interface, prompts, and generated answers are all in English — the app
 accepts questions in any language Groq's model understands (French
 included), but always answers in English.
 
-### Graph mode is traceable too
-
-A knowledge-graph relation on its own (`"caffeine" → improves →
-"performance"`) doesn't say *which paper* it came from. Each relation
-carries the `paper_id` it was extracted from, looked up against `papers`
-to show the real title (linked to the source) next to every citation —
-not just a floating triplet:
-
-![Graph mode traceability](docs/images/04_graph_traceability.png)
-
-*Bug fixed here, found by actually clicking through the UI in graph
-mode*: a broadly-matching term like "caffeine" or "performance" can match
-dozens of graph nodes and return **over 100 relations** with no cap —
-all of which were going straight into the LLM prompt (confirmed: one real
-request logged 107 chunks / 2524 prompt tokens / 1.2s generation, roughly
-**2x** a normal hybrid/vector call). Graph mode now caps to the same
-`top_k` as every other mode (more before re-ranking, so the cross-encoder
-has a real pool to choose from) — the same request afterward: 6 chunks /
-308 tokens / 0.5s.
 
 ## Ingestion
 
@@ -219,9 +175,7 @@ number that would be easy to misread as "N new rows added".
 
 *Possible extension: wire these scripts into a scheduler (cron, Prefect,
 Airflow) for continuous ingestion rather than manually triggered — not
-done here; corpus volume and publication frequency didn't justify it for
-a solo project, but it's the clear next step for the ingestion-pipeline
-rubric point (currently 1/2, would become 2/2 with a real orchestrator).*
+done here
 
 ## Evaluation
 
@@ -271,41 +225,13 @@ generation quality, and retrieval quality — details and screenshot in
 
 ## Known limitations & self-assessment
 
-Honest gaps, rather than glossing over them:
-
-- ✅ **Hybrid search** (vector + BM25 with RRF), evaluated against each
-  method alone — see [Evaluation](#evaluation).
-- ✅ **Document re-ranking** — implemented (`cross-encoder/ms-marco-MiniLM-L-6-v2`
-  over `top_k×3` candidates, toggle in the UI) and evaluated across all 4
-  retrieval modes. **Off by default**, on purpose: it clearly helps `bm25`
-  (MRR 0.62→0.88) but measurably hurts `hybrid`, the default mode
-  (recall@8 1.00→0.875) — the decision follows the measurement rather
-  than assuming re-ranking is free upside. Full comparison in
-  [docs/evaluation.md](docs/evaluation.md#re-ranking-measured-not-assumed).
 - ❌ **Query rewriting** — not implemented. Would add: a light LLM call to
   reformulate the user's question into English retrieval terminology
   before search (the corpus and prompts are English; a question asked in
   another language is more likely to hurt BM25's exact-match scoring than
   the embedding-based modes — see [docs/evaluation.md](docs/evaluation.md)).
 - ❌ **Cloud deployment** — not done, runs locally via `docker compose`.
-- ❌ **Query-vocabulary drift detection** (do incoming questions gradually
-  shift toward topics/terms the corpus doesn't cover?) — deliberately not
-  built. A real version needs embedding-based clustering over time; a
-  correct-but-shallow proxy would need calibration against real traffic
-  this project doesn't have yet. Rather than ship a metric that looks
-  scientific but isn't, it's left as a documented gap.
-- ❌ **Embedding-model drift** — not tracked, because `EMBEDDING_MODEL`
-  has never changed and nothing versions it; a metric that would always
-  read "no drift" is not a metric worth building. Relevant if the
-  embedding model is ever swapped — see [docs/monitoring.md](docs/monitoring.md).
-- The corpus covers abstracts only (no full text).
-- **82% of indexed papers are classified `study_type: unknown`** (visible
-  on the Grafana dashboard) — `pubType`-based classification works well
-  for Europe PMC but OpenAlex doesn't expose that metadata; see
-  [docs/monitoring.md](docs/monitoring.md) for detail.
-- LLM-based entity extraction can introduce noise into the graph; it's
-  treated as an additional retrieval source, not ground truth.
-- Does not replace professional medical or nutritional advice.
+
 
 ## Project structure
 
