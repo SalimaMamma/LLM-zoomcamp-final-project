@@ -74,19 +74,6 @@ which feeds a large share of the corpus.
 | Distinct papers retrieved (30d) | stat | Source diversity — are we always pulling the same handful of papers? |
 | Top 10 most-retrieved papers | table | Which specific papers dominate |
 
-**Why "zero-result rate" instead of a similarity threshold**: `vector`
-mode returns a true cosine similarity (0-1), `bm25` returns an unbounded
-lexical score, `hybrid` returns an RRF score (~0.01-0.03 range by
-construction), and `graph` returns no score at all. These are not on a
-comparable scale — the dashboard makes this visible rather than hiding
-it: in the screenshot above, `bm25`'s score sits around 6 while
-`hybrid`/`vector` sit near 0 on the same axis. A single hardcoded
-similarity threshold across modes would silently flag one mode as
-"always confident" and another as "always uncertain" regardless of actual
-quality. So "no relevant chunk found" is defined as **zero chunks
-returned** (mode-agnostic, unambiguous) instead. Per-mode calibrated
-thresholds would be a reasonable follow-up, not implemented here.
-
 ## Populating the dashboard
 
 Two ways:
