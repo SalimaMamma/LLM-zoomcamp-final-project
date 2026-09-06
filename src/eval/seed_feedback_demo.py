@@ -41,10 +41,8 @@ load_dotenv()
 
 QUESTIONS_PATH = os.path.join(os.path.dirname(__file__), "questions_annotees.json")
 MODES = ["hybrid", "vector", "bm25", "graph"]
-# L'app désactive le reranking par défaut (voir docs/evaluation.md -- ça
-# aide bm25 mais dégrade hybrid sur l'éval mesurée). Ici on le force à True
-# quand même, uniquement pour peupler les colonnes rerank_ms/reranked du
-# dashboard de démo avec de vraies données plutôt que des NULL partout.
+# Correspond au réglage par défaut de l'app (voir docs/evaluation.md --
+# le reranking améliore tous les modes sur l'éval à gold labels exacts).
 RERANK = True
 
 

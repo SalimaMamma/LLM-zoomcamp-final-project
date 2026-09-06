@@ -116,13 +116,14 @@ mode = st.radio(
 
 rerank = st.checkbox(
     "🎯 Re-rank with cross-encoder",
-    value=False,
+    value=True,
     help=(
         "Second pass with a cross-encoder (ms-marco-MiniLM) over a larger "
-        "candidate pool before picking the final sources. Off by default: "
-        "measured evaluation shows it helps bm25 a lot (MRR 0.62→0.88) but "
-        "hurts hybrid, the default mode (recall@8 1.00→0.88) — see "
-        "docs/evaluation.md for the full comparison across modes."
+        "candidate pool before picking the final sources. On by default: "
+        "on a 24-question gold-labeled evaluation, it improves every mode, "
+        "including hybrid (chunk recall@8 0.83→0.92, MRR 0.74→0.90) — see "
+        "docs/evaluation.md for the full comparison, including an earlier, "
+        "smaller evaluation that pointed the other way."
     ),
 )
 

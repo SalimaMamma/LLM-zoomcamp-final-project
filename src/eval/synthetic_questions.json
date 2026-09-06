@@ -1,0 +1,170 @@
+[
+  {
+    "question": "How long do interventions need to last to see more consistent effects?",
+    "answer": "Interventions lasting at least 8 weeks may produce more consistent effects.",
+    "gold_chunk_id": "42027564::conclusion::3",
+    "gold_paper_id": "42027564",
+    "section": "conclusion"
+  },
+  {
+    "question": "What effect does creatine supplementation have on anaerobic power and body composition?",
+    "answer": "Creatine increases anaerobic power regardless of training environment, but body composition gains depend on concurrent resistance training.",
+    "gold_chunk_id": "42027564::conclusion::3",
+    "gold_paper_id": "42027564",
+    "section": "conclusion"
+  },
+  {
+    "question": "What factors are considered when tailoring the Participant Classification Framework to different sports?",
+    "answer": "It can be tailored toward different sports, athletes, and/or events, with sport‑specific examples provided.",
+    "gold_chunk_id": "W4206651290::conclusion::2",
+    "gold_paper_id": "W4206651290",
+    "section": "conclusion"
+  },
+  {
+    "question": "Which athlete groups are referenced when discussing chronological age in the Participant Classification Framework?",
+    "answer": "Chronological age is considered with reference to junior and masters athletes, as well as Paralympic athletes.",
+    "gold_chunk_id": "W4206651290::conclusion::2",
+    "gold_paper_id": "W4206651290",
+    "section": "conclusion"
+  },
+  {
+    "question": "How does the excerpt describe EK's role in nutrition?",
+    "answer": "EK is a flexible nutritional strategy for cognitive support.",
+    "gold_chunk_id": "42063954::result::2",
+    "gold_paper_id": "42063954",
+    "section": "result"
+  },
+  {
+    "question": "What does the excerpt say about the need for further research on EK?",
+    "answer": "Further investigation in well-powered, long-term trials is warranted to clarify optimal dosing, formulation, and clinical applicability.",
+    "gold_chunk_id": "42063954::result::2",
+    "gold_paper_id": "42063954",
+    "section": "result"
+  },
+  {
+    "question": "Did eTRF change 24‑hour energy expenditure?",
+    "answer": "No, eTRF did not affect 24‑hour energy expenditure (Δ = 10 ± 16 kcal/d; P = 0.55).",
+    "gold_chunk_id": "W2962816313::result::2",
+    "gold_paper_id": "W2962816313",
+    "section": "result"
+  },
+  {
+    "question": "What effect did eTRF have on ghrelin levels?",
+    "answer": "eTRF decreased mean ghrelin levels by 32 ± 10 pg/mL (P = 0.006).",
+    "gold_chunk_id": "W2962816313::result::2",
+    "gold_paper_id": "W2962816313",
+    "section": "result"
+  },
+  {
+    "question": "How many study clusters were used for the cognitive findings?",
+    "answer": "Only two study clusters.",
+    "gold_chunk_id": "42588143::result::4",
+    "gold_paper_id": "42588143",
+    "section": "result"
+  },
+  {
+    "question": "Were any serious adverse events reported in the studies?",
+    "answer": "No serious adverse events were reported.",
+    "gold_chunk_id": "42588143::result::4",
+    "gold_paper_id": "42588143",
+    "section": "result"
+  },
+  {
+    "question": "Which pro-inflammatory cytokines were elevated in the Protein group?",
+    "answer": "IFN-γ and IL-6 were elevated in the Protein group.",
+    "gold_chunk_id": "42616143::conclusion::2",
+    "gold_paper_id": "42616143",
+    "section": "conclusion"
+  },
+  {
+    "question": "Did synbiotic supplementation provide additional benefits beyond protein supplementation and resistance training?",
+    "answer": "No, the addition of synbiotic supplementation did not provide further benefits beyond those achieved with protein supplementation and resistance training alone.",
+    "gold_chunk_id": "42616143::conclusion::2",
+    "gold_paper_id": "42616143",
+    "section": "conclusion"
+  },
+  {
+    "question": "Did creatine supplementation change cognitive function in healthy older adults?",
+    "answer": "No, it did not promote any significant change.",
+    "gold_chunk_id": "W2072529815::conclusion::3",
+    "gold_paper_id": "W2072529815",
+    "section": "conclusion"
+  },
+  {
+    "question": "Did strength training improve emotional state and muscle strength?",
+    "answer": "Yes, it improved emotional state and muscle strength.",
+    "gold_chunk_id": "W2072529815::conclusion::3",
+    "gold_paper_id": "W2072529815",
+    "section": "conclusion"
+  },
+  {
+    "question": "Did aging reduce post-absorptive and post-prandial muscle protein synthesis?",
+    "answer": "Yes, there were modest but significant reductions in both post-absorptive and post-prandial MPS with aging.",
+    "gold_chunk_id": "42326998::result::4",
+    "gold_paper_id": "42326998",
+    "section": "result"
+  },
+  {
+    "question": "Does exercise preserve muscle protein synthesis response in older adults?",
+    "answer": "Yes, the preserved MPS response to exercise suggests maintained anabolic potential when appropriate stimuli are provided.",
+    "gold_chunk_id": "42326998::result::4",
+    "gold_paper_id": "42326998",
+    "section": "result"
+  },
+  {
+    "question": "What did the exploratory study find about commonalities in ultra-endurance runners?",
+    "answer": "It found commonalities exist in both physiological and psychological experiences.",
+    "gold_chunk_id": "42389155::result::5",
+    "gold_paper_id": "42389155",
+    "section": "result"
+  },
+  {
+    "question": "What does the study highlight as a need for future work?",
+    "answer": "It highlights the need for further research and collaborations across disciplines to develop a holistic approach to support optimal ultra-endurance preparation, performance, and recovery.",
+    "gold_chunk_id": "42389155::result::5",
+    "gold_paper_id": "42389155",
+    "section": "result"
+  },
+  {
+    "question": "How many runners took part in the study?",
+    "answer": "A total of 160 runners participated.",
+    "gold_chunk_id": "40089940::result::1",
+    "gold_paper_id": "40089940",
+    "section": "result"
+  },
+  {
+    "question": "What was the average carbohydrate intake per hour reported during the competition?",
+    "answer": "The average carbohydrate intake was 35 ± 17 g/h.",
+    "gold_chunk_id": "40089940::result::1",
+    "gold_paper_id": "40089940",
+    "section": "result"
+  },
+  {
+    "question": "What has recent research identified as important for stimulating muscle protein synthesis in older adults?",
+    "answer": "The timing of protein intake is also important.",
+    "gold_chunk_id": "W2009987429::result::1",
+    "gold_paper_id": "W2009987429",
+    "section": "result"
+  },
+  {
+    "question": "What has been identified as cut‑points for diagnosing sarcopenia?",
+    "answer": "Specific muscle mass, strength and function cut‑points.",
+    "gold_chunk_id": "W2009987429::result::1",
+    "gold_paper_id": "W2009987429",
+    "section": "result"
+  },
+  {
+    "question": "What types of performance improvements were most often reported with creatine supplementation?",
+    "answer": "Creatine supplementation was most often associated with favorable changes in repeated-sprint performance and high-intensity power output, especially during intermittent, sprint-based, or power-endurance tasks.",
+    "gold_chunk_id": "42280321::result::2",
+    "gold_paper_id": "42280321",
+    "section": "result"
+  },
+  {
+    "question": "What loading and maintenance doses were commonly used in the creatine supplementation protocols described?",
+    "answer": "Most protocols used a 5-7-day loading phase of 20 g/day, sometimes followed by a maintenance dose of 2-5 g/day.",
+    "gold_chunk_id": "42280321::result::2",
+    "gold_paper_id": "42280321",
+    "section": "result"
+  }
+]

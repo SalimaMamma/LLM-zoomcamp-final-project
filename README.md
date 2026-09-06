@@ -225,26 +225,33 @@ rubric point (currently 1/2, would become 2/2 with a real orchestrator).*
 
 ## Evaluation
 
-Two automated evaluations, each reproducible with a single command, fully
-detailed in **[docs/evaluation.md](docs/evaluation.md)**.
+Three automated evaluations, each reproducible with a single command,
+fully detailed in **[docs/evaluation.md](docs/evaluation.md)**.
 
-**Retrieval** — 4 modes compared (Recall@8 / MRR) on 8 annotated questions:
+**Retrieval — 24 questions with exact gold labels** *(the one to trust —
+see below)*: a Groq call reads a real indexed chunk and writes a question
+whose answer is stated in that exact chunk, so `chunk_id`/`paper_id`
+become exact gold labels instead of a keyword-match proxy:
 
-| Mode | Recall@8 | MRR |
+| Mode | Chunk Recall@8 | Chunk MRR |
 |---|:---:|:---:|
-| vector | 1.00 | 0.938 |
-| bm25 | 0.875 | 0.625 |
-| **hybrid** *(app default)* | **1.00** | **0.917** |
-| graph | 1.00 | 1.00* |
+| vector+rerank | 0.92 | 0.90 |
+| bm25+rerank | 0.79 | 0.76 |
+| **hybrid+rerank** *(app default)* | **0.92** | **0.90** |
+| graph | 0.00† | — |
 
-*\*The `graph` mode uses a hit-based metric that isn't directly comparable
-rank-for-rank to the other three — see the full discussion in
-[docs/evaluation.md](docs/evaluation.md#why-hybrid-is-the-apps-default-mode-despite-these-numbers).*
+*†Graph relations aren't indexed chunks — only paper-level matching
+applies to that mode (0.21-0.29 recall, genuinely weak — see
+[docs/evaluation.md](docs/evaluation.md#1b-synthetic-gold-label-evaluation-24-questions--the-one-to-trust)).*
 
-Each of these 4 modes was also re-evaluated **with cross-encoder
-re-ranking** on top — see
-[Best practices](#known-limitations--self-assessment) below for the
-(mixed, mode-dependent) result.
+Building this question set surfaced a real corpus-quality issue — see
+[Known limitations](#known-limitations--self-assessment).
+
+An earlier, smaller evaluation (8 hand-picked questions, keyword-match
+proxy) is also in the repo and still documented — it's what the
+re-ranking default was *originally* decided from, before the 24-question
+evaluation reversed that call. Full history in
+[docs/evaluation.md](docs/evaluation.md#1-retrieval-evaluation).
 
 **LLM generation** — 2 prompting strategies compared via an LLM-judge
 (faithfulness score 0-10), full 8-question run:
@@ -277,11 +284,12 @@ Honest gaps, rather than glossing over them:
   method alone — see [Evaluation](#evaluation).
 - ✅ **Document re-ranking** — implemented (`cross-encoder/ms-marco-MiniLM-L-6-v2`
   over `top_k×3` candidates, toggle in the UI) and evaluated across all 4
-  retrieval modes. **Off by default**, on purpose: it clearly helps `bm25`
-  (MRR 0.62→0.88) but measurably hurts `hybrid`, the default mode
-  (recall@8 1.00→0.875) — the decision follows the measurement rather
-  than assuming re-ranking is free upside. Full comparison in
-  [docs/evaluation.md](docs/evaluation.md#re-ranking-measured-not-assumed).
+  retrieval modes, twice: an initial 8-question evaluation suggested it
+  hurt `hybrid`, so it shipped off by default; a later 24-question
+  evaluation with exact gold labels showed the opposite (chunk recall@8
+  0.83→0.92 for `hybrid`), so the default was flipped to **on**. Both
+  evaluations and the reversal are documented, not just the final answer
+  — see [docs/evaluation.md](docs/evaluation.md#1-retrieval-evaluation).
 - ❌ **Query rewriting** — not implemented. Would add: a light LLM call to
   reformulate the user's question into English retrieval terminology
   before search (the corpus and prompts are English; a question asked in
@@ -303,6 +311,24 @@ Honest gaps, rather than glossing over them:
   on the Grafana dashboard) — `pubType`-based classification works well
   for Europe PMC but OpenAlex doesn't expose that metadata; see
   [docs/monitoring.md](docs/monitoring.md) for detail.
+- **~33% off-topic papers in a sample check**: building the synthetic
+  evaluation set surfaced 6 clearly off-topic papers (developmental
+  biology, liver disease, a diabetes drug in mice — nothing to do with
+  sports nutrition) out of 18 sampled. Traced to loose Europe PMC keyword
+  matching, e.g. the query `"fasted cardio fat oxidation"` pulling in a
+  cardiovascular-epidemiology paper because it contains "fat" and
+  "cardio(vascular)" in an unrelated sense. Not fixed here (would need a
+  topical-relevance filter on ingestion — a separate, larger piece of
+  work) — the 12 questions from those papers were excluded from the
+  retrieval evaluation instead, so the eval measures retrieval quality,
+  not corpus cleanliness. Full story in
+  [docs/evaluation.md](docs/evaluation.md#a-real-finding-this-surfaced-33-of-the-sampled-papers-were-off-topic).
+- **`graph` mode is genuinely the weakest retrieval mode** (0.21-0.29
+  paper-level recall on the 24-question gold-label eval), not just
+  "harder to score fairly" as the earlier 8-question evaluation's
+  artificially perfect 1.00/1.00 score suggested. Still available as a
+  mode — the knowledge-graph traversal is a genuinely different path,
+  useful for relation-style questions — but not a good default.
 - LLM-based entity extraction can introduce noise into the graph; it's
   treated as an additional retrieval source, not ground truth.
 - Does not replace professional medical or nutritional advice.
