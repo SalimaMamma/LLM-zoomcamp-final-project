@@ -54,20 +54,6 @@ which feeds a large share of the corpus.
 | Error rate (%) | stat | % of requests where the pipeline raised an exception |
 | Avg tokens per request (in/out) | barchart | Groq `prompt_tokens` / `completion_tokens`, direct proxy for $ cost per request |
 
-**Real finding, not a hypothesis**: generation dominates end-to-end
-latency over embedding+search combined by roughly an order of magnitude
-(embedding ~50ms, search ~250ms, generation ~1.3s in the current sample —
-the exact numbers move around with Groq load, but the gap is consistent).
-If latency ever needs optimizing, the LLM call is where the budget is,
-not the retrieval side.
-
-**Re-ranking's real cost, measured, not just estimated**: when enabled,
-the cross-encoder pass (~1.3s) roughly **doubles** total latency — it's
-in the same ballpark as generation itself, not a cheap add-on. Combined
-with the recall@8 regression on `hybrid` documented in
-[docs/evaluation.md](evaluation.md#re-ranking-measured-not-assumed), this
-is the second, independent reason (latency, not just accuracy) the UI
-checkbox defaults to off.
 
 ### Row 4 — generation quality & corpus freshness
 
@@ -78,13 +64,6 @@ checkbox defaults to off.
 | "No relevant source" rate (%) | stat | How often the model correctly declines instead of hallucinating |
 | Well-formatted answer rate (%) | stat | % with both a citation and an evidence-level line |
 
-On the current (small, synthetic ~32-request) seed: avg year **2016**,
-**450/561 papers never retrieved**, decline rate **12.5%**, well-formatted
-rate **68.8%**. That well-formatted number is a genuine, slightly
-uncomfortable finding: even with an explicit prompt instruction, the model
-skips the citation or the evidence-level line in a meaningful chunk of
-answers — worth watching as real usage accumulates, not just assumed to
-be near-100% because the prompt asks for it.
 
 ### Row 5 — retrieval quality
 
@@ -127,56 +106,6 @@ Two ways:
    ⚠️ Uses ~32 Groq calls, paced 8s apart to stay under Groq's 8,000
    tokens/minute limit — see [Groq quota](setup.md#groq-free-tier-quota).
 
-## Bugs found by actually testing this dashboard, not just committing config
-
-1. **Both `piechart` panels showed one merged slice instead of real
-   categories.** Without an explicit `reduceOptions.values: true`, Grafana
-   (v11) collapses every row of a table query into a single aggregated
-   value named "total". Fixed in the panel `options`.
-2. **All `feedback`-based panels showed "No data" despite the table
-   having real rows.** The default time range was "Last 6 hours", but
-   `date_trunc('day', created_at)` buckets every row inserted today down
-   to *today at 00:00* — already outside a 6-hour window by the time the
-   data was queried, and Grafana's panel clips data points outside the
-   selected range client-side even though the SQL itself ignores the time
-   picker. Fixed by setting the dashboard's default range to `now-30d` →
-   `now` (top-level `"time"` key in the dashboard JSON).
-3. **A regex was too strict and mis-rated genuinely good answers as
-   negative.** The seed script originally required the literal
-   `[source: n]` format from the prompt, but the model often cites as
-   plain `[n]`. Fixed by accepting both, and by recognizing an explicit
-   "no relevant source" decline as correct behavior rather than a
-   formatting failure — both checks now live once in
-   `src/llm/answer.py`, shared by the app and the seed script instead of
-   duplicated.
-4. **A Qdrant `ReadTimeout` crashed the entire seed run**, losing every
-   result already collected, because only the LLM generation call was
-   wrapped in `try/except` — the retrieval step (Qdrant/BM25/reranker)
-   wasn't. This showed up as a real **3.13% error rate** on the dashboard
-   the first time it happened after the fix: a real, reproduced timeout,
-   caught and logged instead of crashing (transient — the error rate
-   reads 0% on a re-seed without a Qdrant hiccup, which is expected, not
-   a regression). Fixed by wrapping the
-   retrieval step too, in both `streamlit_app/app.py` and
-   `seed_feedback_demo.py`.
-5. **Graph mode had no cap on candidates**, unlike every other mode.
-   `get_relations_for_entity()` for a broadly-matching term returned
-   **107 relations** for one real question, all sent to the LLM: 2524
-   prompt tokens and 1.2s generation, roughly 2x a normal call — found by
-   clicking through graph mode in the browser, not by reading the code.
-   Now capped to the same `top_k` as vector/bm25/hybrid (same request
-   afterward: 6 chunks, 308 tokens, 0.5s). Also fixed in the retrieval
-   evaluation (`retrieval_eval.py`), which had been comparing `graph`
-   against an uncapped pool while every other mode was capped at
-   `top_k` — numbers were unchanged on this small question set once
-   capped, but the comparison is honest now rather than accidentally
-   unfair. See [docs/evaluation.md](evaluation.md) and the README's
-   "Graph mode is traceable too" section for the full story (this fix
-   rode along with adding source traceability to graph-mode citations).
-
-None of these five were visible from reading the code or the JSON — all
-five only surfaced once real data existed and the dashboard was
-actually opened in a browser.
 
 ## What's missing to go further
 
