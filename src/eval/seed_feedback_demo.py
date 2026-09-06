@@ -30,7 +30,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "graphrag"))
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "llm"))
 
 from hybrid import HybridRetriever, rerank_chunks  # noqa: E402
-from graph_store import KnowledgeGraph  # noqa: E402
+from graph_store import KnowledgeGraph, get_papers_metadata  # noqa: E402
 from answer import (  # noqa: E402
     generate_answer_with_usage,
     is_declined_answer,
@@ -114,11 +114,16 @@ def main():
                     t0 = time.time()
                     relations = kg.get_relations_for_entity(q["expected_keywords"][0])
                     search_ms = int((time.time() - t0) * 1000)
+                    # Voir streamlit_app/app.py : un terme courant peut retourner
+                    # des dizaines de relations -- on plafonne comme les autres
+                    # modes plutôt que de tout envoyer au LLM.
+                    relations = relations[:18 if RERANK else 6]
+                    paper_meta = get_papers_metadata([r.get("paper_id") for r in relations])
                     chunks = [
                         {
                             "content": f"{r['subject']} {r['relation']} {r['object']}",
-                            "study_type": "graph_relation",
-                            "year": "-",
+                            "study_type": paper_meta.get(r.get("paper_id"), {}).get("study_type") or "unknown",
+                            "year": paper_meta.get(r.get("paper_id"), {}).get("year") or "?",
                             "paper_id": r.get("paper_id"),
                         }
                         for r in relations

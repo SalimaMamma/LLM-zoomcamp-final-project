@@ -58,7 +58,14 @@ MRR than `hybrid`. Two reasons not to read this as "turn hybrid off":
    An MRR of 1.0 here means "the term exists somewhere in the graph", not
    "the best answer is ranked first". This isn't directly comparable to
    the same metric applied to the other three modes — a real limitation of
-   the eval script, documented here rather than hidden.
+   the eval script, documented here rather than hidden. (A related bug was
+   fixed alongside this: `evaluate_graph()` used to pull from an
+   *uncapped* pool of relations — a broadly-matching term can return 100+
+   — while every other mode was capped at `top_k`, an unfair comparison.
+   Now capped the same way; numbers were unchanged on this 8-question set,
+   but the comparison is honest rather than accidentally lopsided. See
+   [docs/monitoring.md](monitoring.md) for the production-side version of
+   the same bug, caught with real token-cost numbers.)
 3. **BM25 alone drops noticeably** (0.625 MRR) on questions asked in
    French against an English corpus — exact lexical matching misses the
    synonyms/translations that embeddings capture. `hybrid` remains the

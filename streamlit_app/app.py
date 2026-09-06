@@ -22,7 +22,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src", "graphrag")
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src", "llm"))
 
 from hybrid import HybridRetriever, rerank_chunks  # noqa: E402
-from graph_store import KnowledgeGraph  # noqa: E402
+from graph_store import KnowledgeGraph, get_papers_metadata  # noqa: E402
 from answer import (  # noqa: E402
     generate_answer_with_usage,
     is_declined_answer,
@@ -141,12 +141,27 @@ if st.button("Check", type="primary") and question:
                 t0 = time.time()
                 relations = kg.get_relations_for_entity(question)
                 search_ms = int((time.time() - t0) * 1000)
+                # Un terme courant ("performance") peut matcher des dizaines de
+                # nœuds et retourner des centaines de relations -- sans borne,
+                # ça part tout dans le prompt du LLM (vu en pratique : 107
+                # chunks, 2500+ tokens, ~2x un appel normal). On plafonne comme
+                # les autres modes, avec plus de marge si le reranking va
+                # ensuite trier ce pool pour ne garder que le meilleur top_k.
+                pool_size = 18 if rerank else 6
+                relations = relations[:pool_size]
+                # Une relation seule ("caffeine improves performance") n'est pas
+                # traçable : on va rechercher le papier source (titre + URL +
+                # vrai type d'étude/année) pour que la citation pointe vers un
+                # article réel, pas juste un triplet flottant.
+                paper_meta = get_papers_metadata([r.get("paper_id") for r in relations])
                 chunks = [
                     {
                         "content": f"{r['subject']} {r['relation']} {r['object']}",
-                        "study_type": "graph_relation",
-                        "year": "-",
+                        "study_type": paper_meta.get(r.get("paper_id"), {}).get("study_type") or "unknown",
+                        "year": paper_meta.get(r.get("paper_id"), {}).get("year") or "?",
                         "paper_id": r.get("paper_id"),
+                        "paper_title": paper_meta.get(r.get("paper_id"), {}).get("title"),
+                        "paper_url": paper_meta.get(r.get("paper_id"), {}).get("url"),
                     }
                     for r in relations
                 ]
@@ -227,6 +242,13 @@ if st.button("Check", type="primary") and question:
                         f"**[{i}]** *(type: {c.get('study_type', '?')}, "
                         f"year: {c.get('year', '?')})* — {c['content'][:300]}..."
                     )
+                    if c.get("paper_title"):
+                        # Mode graph : la relation seule (sujet/relation/objet)
+                        # ne dit pas d'où elle vient -- on relie explicitement
+                        # au papier source dont elle a été extraite.
+                        label = c["paper_title"]
+                        ref = f"[{label}]({c['paper_url']})" if c.get("paper_url") else label
+                        st.caption(f"↳ extracted from: {ref}")
 
             st.session_state["last_question"] = question
             st.session_state["last_answer"] = answer

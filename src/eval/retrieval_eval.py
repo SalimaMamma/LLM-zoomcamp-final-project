@@ -60,6 +60,12 @@ def evaluate_graph(kg: KnowledgeGraph, questions: list[dict], rerank: bool) -> d
         # heuristique simple : on cherche une entité correspondant au premier mot-clé
         primary_term = q["expected_keywords"][0]
         relations = kg.get_relations_for_entity(primary_term)
+        # Un terme courant peut retourner des dizaines/centaines de relations --
+        # sans plafond, le mode graph serait évalué sur un pool bien plus large
+        # que vector/bm25/hybrid (limités à top_k), ce qui gonflerait son
+        # recall artificiellement. Même plafond que dans l'app (voir
+        # streamlit_app/app.py).
+        relations = relations[:TOP_K * 3 if rerank else TOP_K]
         chunks = [
             {"content": f"{r['subject']} {r['relation']} {r['object']}"}
             for r in relations

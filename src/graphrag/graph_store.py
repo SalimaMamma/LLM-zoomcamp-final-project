@@ -23,6 +23,29 @@ def get_connection():
     )
 
 
+def get_papers_metadata(paper_ids: list[str]) -> dict[str, dict]:
+    """Récupère titre/année/type d'étude/URL pour une liste de paper_id --
+    permet de retracer une relation du graphe (sujet/relation/objet, sans
+    contexte en soi) jusqu'au papier source dont elle a été extraite. Voir
+    streamlit_app/app.py, mode "graph"."""
+    paper_ids = [p for p in dict.fromkeys(paper_ids) if p]  # dédoublonne, garde l'ordre
+    if not paper_ids:
+        return {}
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT paper_id, title, year, study_type, url FROM papers WHERE paper_id = ANY(%s)",
+        (paper_ids,),
+    )
+    metadata = {
+        row[0]: {"title": row[1], "year": row[2], "study_type": row[3], "url": row[4]}
+        for row in cur.fetchall()
+    }
+    cur.close()
+    conn.close()
+    return metadata
+
+
 class KnowledgeGraph:
     def __init__(self):
         self.graph = nx.MultiDiGraph()

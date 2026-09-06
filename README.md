@@ -182,6 +182,26 @@ Interface, prompts, and generated answers are all in English — the app
 accepts questions in any language Groq's model understands (French
 included), but always answers in English.
 
+### Graph mode is traceable too
+
+A knowledge-graph relation on its own (`"caffeine" → improves →
+"performance"`) doesn't say *which paper* it came from. Each relation
+carries the `paper_id` it was extracted from, looked up against `papers`
+to show the real title (linked to the source) next to every citation —
+not just a floating triplet:
+
+![Graph mode traceability](docs/images/04_graph_traceability.png)
+
+*Bug fixed here, found by actually clicking through the UI in graph
+mode*: a broadly-matching term like "caffeine" or "performance" can match
+dozens of graph nodes and return **over 100 relations** with no cap —
+all of which were going straight into the LLM prompt (confirmed: one real
+request logged 107 chunks / 2524 prompt tokens / 1.2s generation, roughly
+**2x** a normal hybrid/vector call). Graph mode now caps to the same
+`top_k` as every other mode (more before re-ranking, so the cross-encoder
+has a real pool to choose from) — the same request afterward: 6 chunks /
+308 tokens / 0.5s.
+
 ## Ingestion
 
 Two sources, writing into the same `papers` table (can be combined):

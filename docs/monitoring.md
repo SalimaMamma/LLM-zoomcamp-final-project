@@ -157,9 +157,23 @@ Two ways:
    instead of crashing the second time it happened. Fixed by wrapping the
    retrieval step too, in both `streamlit_app/app.py` and
    `seed_feedback_demo.py`.
+5. **Graph mode had no cap on candidates**, unlike every other mode.
+   `get_relations_for_entity()` for a broadly-matching term returned
+   **107 relations** for one real question, all sent to the LLM: 2524
+   prompt tokens and 1.2s generation, roughly 2x a normal call — found by
+   clicking through graph mode in the browser, not by reading the code.
+   Now capped to the same `top_k` as vector/bm25/hybrid (same request
+   afterward: 6 chunks, 308 tokens, 0.5s). Also fixed in the retrieval
+   evaluation (`retrieval_eval.py`), which had been comparing `graph`
+   against an uncapped pool while every other mode was capped at
+   `top_k` — numbers were unchanged on this small question set once
+   capped, but the comparison is honest now rather than accidentally
+   unfair. See [docs/evaluation.md](evaluation.md) and the README's
+   "Graph mode is traceable too" section for the full story (this fix
+   rode along with adding source traceability to graph-mode citations).
 
-None of these four were visible from reading the code or the JSON — all
-four only surfaced once real data existed and the dashboard was
+None of these five were visible from reading the code or the JSON — all
+five only surfaced once real data existed and the dashboard was
 actually opened in a browser.
 
 ## What's missing to go further
