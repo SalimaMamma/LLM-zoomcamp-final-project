@@ -79,26 +79,7 @@ which case the host-mapped ports make those services reachable).
 
 ## Troubleshooting
 
-### Port collisions
 
-If `docker compose up` fails with `port is already allocated`, another
-project on your machine is already using that port (common for Streamlit
-on 8501 and Grafana on 3000 — two very common default ports). Find the
-culprit:
-
-```bash
-docker ps --filter "publish=8501" --format "{{.Names}}"
-```
-
-This repo already uses remapped ports (8502/3001, see the `app`/`grafana`
-services' `ports` section in `docker-compose.yml`) to avoid this by
-default — but if *your* other projects use 8502/3001, remap again.
-
-One specific case: after a Docker Desktop restart, if `app` or `grafana`
-exit with `Exited (255)` and no explicit error in `docker compose logs`,
-it's almost always this same port collision, lost to another container
-that restarted faster — check with `docker compose ps -a` and
-`docker ps -a --filter publish=<port>`.
 
 ### Groq free-tier quota
 
@@ -110,27 +91,6 @@ question × strategy) are the biggest consumers. If you see:
 ```
 groq.RateLimitError: Error code: 429 ... rate_limit_exceeded
 ```
-
-the day's quota is exhausted — wait for the next day's reset, or switch to
-a paid Groq tier. This isn't a bug in the project: the scripts affected
-(`llm_eval.py`, `seed_feedback_demo.py`) save results incrementally, so
-re-running the same command the next day resumes cleanly instead of
-starting over.
-
-### Local edits not reflected in the container
-
-`docker-compose.yml` mounts `./src`, `./streamlit_app` and `./data` as
-volumes on the `app` service — a locally edited file is immediately
-visible inside the container, no rebuild needed for Python code changes. A
-rebuild (`docker compose build app`) is only needed if you change
-`requirements.txt` or the `Dockerfile` itself.
-
-### `service "app" is not running`
-
-Check the real state with `docker compose ps -a` (not just `ps`, which
-hides stopped containers) and look at `docker compose logs app --tail 50`
-for the cause. See also [Port collisions](#port-collisions) above — the
-most common cause encountered while building this project.
 
 ## Reproducibility
 
