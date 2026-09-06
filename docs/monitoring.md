@@ -79,8 +79,8 @@ checkbox defaults to off.
 | Well-formatted answer rate (%) | stat | % with both a citation and an evidence-level line |
 
 On the current (small, synthetic ~32-request) seed: avg year **2016**,
-**450/561 papers never retrieved**, decline rate **19.4%**, well-formatted
-rate **61.3%**. That well-formatted number is a genuine, slightly
+**450/561 papers never retrieved**, decline rate **12.5%**, well-formatted
+rate **68.8%**. That well-formatted number is a genuine, slightly
 uncomfortable finding: even with an explicit prompt instruction, the model
 skips the citation or the evidence-level line in a meaningful chunk of
 answers — worth watching as real usage accumulates, not just assumed to
@@ -152,9 +152,11 @@ Two ways:
 4. **A Qdrant `ReadTimeout` crashed the entire seed run**, losing every
    result already collected, because only the LLM generation call was
    wrapped in `try/except` — the retrieval step (Qdrant/BM25/reranker)
-   wasn't. This is now the **3.13% error rate** visible on the dashboard
-   in the screenshot above: a real, reproduced timeout, caught and logged
-   instead of crashing the second time it happened. Fixed by wrapping the
+   wasn't. This showed up as a real **3.13% error rate** on the dashboard
+   the first time it happened after the fix: a real, reproduced timeout,
+   caught and logged instead of crashing (transient — the error rate
+   reads 0% on a re-seed without a Qdrant hiccup, which is expected, not
+   a regression). Fixed by wrapping the
    retrieval step too, in both `streamlit_app/app.py` and
    `seed_feedback_demo.py`.
 5. **Graph mode had no cap on candidates**, unlike every other mode.
