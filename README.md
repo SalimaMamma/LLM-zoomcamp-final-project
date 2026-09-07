@@ -201,11 +201,6 @@ applies to that mode (0.21-0.29 recall, genuinely weak — see
 Building this question set surfaced a real corpus-quality issue — see
 [docs/evaluation.md](docs/evaluation.md#a-real-finding-this-surfaced-33-of-the-sampled-papers-were-off-topic).
 
-An earlier, smaller evaluation (8 hand-picked questions, keyword-match
-proxy) is also in the repo and still documented — it's what the
-re-ranking default was *originally* decided from, before the 24-question
-evaluation reversed that call. Full history in
-[docs/evaluation.md](docs/evaluation.md#1-retrieval-evaluation).
 
 **LLM generation** — 2 prompting strategies compared via an LLM-judge
 (faithfulness score 0-10), full 8-question run:
@@ -238,6 +233,8 @@ generation quality, and retrieval quality — details and screenshot in
   another language is more likely to hurt BM25's exact-match scoring than
   the embedding-based modes — see [docs/evaluation.md](docs/evaluation.md)).
 - ❌ **Cloud deployment** — not done, runs locally via `docker compose`.
+- **Improve the performances of graph RAG** - improve the knowledge graph construction
+  method and also the retrieval
 
 ## Project structure
 
